@@ -3,7 +3,28 @@ A Cosmoteer-inspired spaceship building and combat game
 
 ## Play the Game!
 
-🎮 **The game is fully playable!** Navigate to the `game/` directory and follow the instructions in [game/README.md](game/README.md)
+🎮 **The game is fully playable!** You can launch the game using our streamlined launcher scripts or manually navigate to the `game/` directory.
+
+### Quick Launch (Recommended)
+
+**Linux/macOS:**
+```bash
+./launch.sh
+```
+
+**Windows:**
+```bash
+launch.bat
+```
+
+The launcher scripts will automatically:
+- Check for Python installation
+- Install pygame if not already installed
+- Launch the game
+
+### Manual Launch
+
+Navigate to the `game/` directory and follow the instructions in [game/README.md](game/README.md)
 
 ```bash
 cd game
