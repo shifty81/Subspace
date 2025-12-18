@@ -26,6 +26,16 @@ pip install pygame
 ## How to Play
 
 ### Starting the Game
+
+**Option 1: Quick Launch (Recommended)**
+
+From the root directory, use the launcher scripts:
+- **Linux/macOS:** `./launch.sh`
+- **Windows:** `launch.bat`
+
+These scripts automatically install dependencies and start the game.
+
+**Option 2: Manual Launch**
 ```bash
 cd game
 python3 main.py
