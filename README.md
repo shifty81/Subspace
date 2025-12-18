@@ -26,7 +26,28 @@ For open source tools and libraries that can help extend this game or build simi
 - [OPEN_SOURCE_RESOURCES.md](OPEN_SOURCE_RESOURCES.md) - Comprehensive guide to game development tools
 - [QUICK_START.md](QUICK_START.md) - Quick start guides for various game engines
 
+## Screenshots
+
+The game features:
+- Grid-based ship building with multiple component types
+- Real-time space combat with lasers and cannons
+- AI-controlled enemy ships
+- Component-level damage system
+- Power management mechanics
+
 ## Built With
 
 - Python 3
 - Pygame
+
+## Documentation
+
+- **[game/README.md](game/README.md)** - How to install and play
+- **[GAMEPLAY.md](GAMEPLAY.md)** - Complete gameplay guide with strategies
+- **[OPEN_SOURCE_RESOURCES.md](OPEN_SOURCE_RESOURCES.md)** - Guide to game dev tools and libraries
+- **[QUICK_START.md](QUICK_START.md)** - Quick start guides for various engines
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details
