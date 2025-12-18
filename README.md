@@ -65,6 +65,7 @@ The game features:
 
 - **[game/README.md](game/README.md)** - How to install and play
 - **[GAMEPLAY.md](GAMEPLAY.md)** - Complete gameplay guide with strategies
+- **[ROADMAP.md](ROADMAP.md)** - Future development plans and feature roadmap
 - **[OPEN_SOURCE_RESOURCES.md](OPEN_SOURCE_RESOURCES.md)** - Guide to game dev tools and libraries
 - **[QUICK_START.md](QUICK_START.md)** - Quick start guides for various engines
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
