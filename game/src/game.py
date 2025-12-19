@@ -7,6 +7,8 @@ from .config import *
 from .ship import Ship
 from .projectile import Projectile
 from .components import Component, ComponentType
+from .starfield import Starfield
+from .particles import ParticleSystem
 
 class Game:
     """Main game class"""
@@ -20,10 +22,17 @@ class Game:
         # Game state
         self.mode = MODE_PLAY
         self.paused = False
+        self.game_time = 0  # Track time for animations
         
         # Camera
         self.camera_x = 0
         self.camera_y = 0
+        
+        # Enhanced starfield
+        self.starfield = Starfield()
+        
+        # Particle system
+        self.particles = ParticleSystem()
         
         # Game objects
         self.player: Optional[Ship] = None
@@ -74,6 +83,7 @@ class Game:
             
             if not self.paused:
                 self._update(dt)
+                self.game_time += dt
             
             self._render()
         
@@ -142,6 +152,9 @@ class Game:
     
     def _update(self, dt: float):
         """Update game state"""
+        # Always update particles
+        self.particles.update(dt)
+        
         if self.mode == MODE_PLAY:
             self._update_play_mode(dt)
         elif self.mode == MODE_BUILD:
@@ -167,6 +180,9 @@ class Game:
         if keys[pygame.K_SPACE]:
             projectiles = self.player.fire_weapons()
             self.projectiles.extend(projectiles)
+            # Create muzzle flash particles for each fired weapon
+            for proj in projectiles:
+                self.particles.create_weapon_fire_effect(proj.x, proj.y, proj.angle, proj.projectile_type)
         
         # Update player
         self.player.update(dt)
@@ -179,9 +195,14 @@ class Game:
             if random.random() < 0.02:  # 2% chance per frame
                 projectiles = enemy.fire_weapons()
                 self.projectiles.extend(projectiles)
+                # Create muzzle flash particles for enemy weapons
+                for proj in projectiles:
+                    self.particles.create_weapon_fire_effect(proj.x, proj.y, proj.angle, proj.projectile_type)
             
             # Remove destroyed enemies
             if enemy.is_destroyed():
+                # Create large explosion when ship is destroyed
+                self.particles.create_explosion(enemy.x, enemy.y, "large")
                 self.enemies.remove(enemy)
         
         # Update projectiles
@@ -197,6 +218,9 @@ class Game:
                 bounds = self.player.get_bounds()
                 if proj.check_collision(bounds):
                     self.player.take_damage(proj.damage, proj.x, proj.y)
+                    # Create impact effects
+                    self.particles.create_explosion(proj.x, proj.y, "small")
+                    self.particles.create_damage_sparks(proj.x, proj.y)
                     proj.alive = False
             
             # Check collision with enemies
@@ -205,6 +229,9 @@ class Game:
                     bounds = enemy.get_bounds()
                     if proj.check_collision(bounds):
                         enemy.take_damage(proj.damage, proj.x, proj.y)
+                        # Create impact effects
+                        self.particles.create_explosion(proj.x, proj.y, "small")
+                        self.particles.create_damage_sparks(proj.x, proj.y)
                         proj.alive = False
                         break
         
@@ -235,8 +262,8 @@ class Game:
         # Clear screen
         self.screen.fill(BLACK)
         
-        # Draw starfield background
-        self._draw_starfield()
+        # Draw enhanced starfield background with parallax
+        self.starfield.render(self.screen, self.camera_x, self.camera_y, self.game_time)
         
         # Render game objects
         if self.player:
@@ -248,6 +275,9 @@ class Game:
         for proj in self.projectiles:
             proj.render(self.screen, self.camera_x, self.camera_y)
         
+        # Render particles on top of everything else
+        self.particles.render(self.screen, self.camera_x, self.camera_y)
+        
         # Draw UI
         self._draw_ui()
         
@@ -256,26 +286,6 @@ class Game:
             self._draw_builder_ui()
         
         pygame.display.flip()
-    
-    def _draw_starfield(self):
-        """Draw a simple starfield background"""
-        # Create pseudo-random stars based on camera position
-        star_density = 0.0005
-        num_stars = int(SCREEN_WIDTH * SCREEN_HEIGHT * star_density)
-        
-        for i in range(num_stars):
-            # Pseudo-random position based on camera and seed
-            seed = i * 12345
-            x = (seed * 17 + int(self.camera_x) // 10) % (SCREEN_WIDTH * 3)
-            y = (seed * 31 + int(self.camera_y) // 10) % (SCREEN_HEIGHT * 3)
-            
-            screen_x = x - (int(self.camera_x) % (SCREEN_WIDTH * 3))
-            screen_y = y - (int(self.camera_y) % (SCREEN_HEIGHT * 3))
-            
-            if 0 <= screen_x < SCREEN_WIDTH and 0 <= screen_y < SCREEN_HEIGHT:
-                brightness = (seed % 100) + 100
-                color = (brightness, brightness, brightness)
-                pygame.draw.circle(self.screen, color, (screen_x, screen_y), 1)
     
     def _draw_ui(self):
         """Draw main UI"""

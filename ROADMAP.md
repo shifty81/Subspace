@@ -23,17 +23,17 @@ This document outlines the planned features and improvements for the Subspace ga
 Goal: Make the game visually appealing with professional graphics
 
 #### 1.1 Space Environment
-- [ ] Enhanced starfield background with parallax scrolling
-- [ ] Nebula and space dust effects
+- [x] Enhanced starfield background with parallax scrolling
+- [x] Nebula and space dust effects
 - [ ] Dynamic lighting and ambient effects
 - [ ] Asteroid fields and space debris
 
 #### 1.2 Particle Systems
-- [ ] Weapon fire particle effects (lasers, projectiles)
-- [ ] Explosion animations with debris
-- [ ] Engine thrust particles
+- [x] Weapon fire particle effects (lasers, projectiles)
+- [x] Explosion animations with debris
+- [x] Engine thrust particles
 - [ ] Shield impact effects
-- [ ] Damage sparks and fire effects
+- [x] Damage sparks and fire effects
 
 #### 1.3 Ship Graphics
 - [ ] Improved component sprites with more detail
@@ -177,4 +177,4 @@ This is a living roadmap. Features may be added, removed, or reprioritized based
 - Developer availability
 - Engine capabilities
 
-**Last Updated**: 2025-12-18
+**Last Updated**: 2025-12-19
