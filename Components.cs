@@ -138,7 +138,18 @@ public class Component
 
     private float GetHealthPercent()
     {
-        return Stats.MaxHealth > 0 ? (float)Stats.Health / Stats.MaxHealth : 1.0f;
+        if (Stats.MaxHealth <= 0) return 1.0f;
+        float percent = (float)Stats.Health / Stats.MaxHealth;
+        return Math.Max(0f, Math.Min(1f, percent)); // Clamp to [0, 1]
+    }
+    
+    private Color GetDamageTintColor(float healthPercent)
+    {
+        return new Color(
+            (int)(255 * (0.3f + 0.7f * healthPercent)),
+            (int)(255 * (0.3f + 0.7f * healthPercent)),
+            (int)(255 * (0.3f + 0.7f * healthPercent))
+        );
     }
 
     public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, int x, int y, int gridSize, Dictionary<string, Texture2D>? componentTextures = null)
@@ -153,11 +164,7 @@ public class Component
             Rectangle destRect = new Rectangle(x, y, gridSize - 2, gridSize - 2);
             
             // Damage indicator (darken based on health)
-            Color tintColor = new Color(
-                (int)(255 * (0.3f + 0.7f * healthPercent)),
-                (int)(255 * (0.3f + 0.7f * healthPercent)),
-                (int)(255 * (0.3f + 0.7f * healthPercent))
-            );
+            Color tintColor = GetDamageTintColor(healthPercent);
             
             spriteBatch.Draw(texture, destRect, tintColor);
             return;
