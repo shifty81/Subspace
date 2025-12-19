@@ -30,19 +30,22 @@ This document outlines the vision for Subspace as a hybrid game that blends the 
 ### 1. **Modular Ship Building** (Cosmoteer)
 Grid-based ship construction with complete freedom to design vessels from scratch.
 
-### 2. **Fleet Command** (Starsector)
+### 2. **Two-Layer Gameplay** (Starsector)
+Hybrid gameplay loop with strategic campaign map for exploration and fleet movement, seamlessly transitioning to tactical combat arena for battles.
+
+### 3. **Fleet Command** (Starsector)
 Manage multiple ships, officers, and combat readiness across your personal armada.
 
-### 3. **Colony Management** (Colony Sims)
+### 4. **Colony Management** (Colony Sims)
 Establish and manage space stations and planetary colonies with resource production, survival challenges, and emergent stories.
 
-### 4. **Dynamic Economy** (Starsector)
+### 5. **Dynamic Economy** (Starsector)
 Living economy with supply/demand, market fluctuations, and trade opportunities.
 
-### 5. **Tactical Combat** (All Three)
-Real-time space combat combining ship design, positioning, and fleet tactics.
+### 6. **Tactical Combat** (All Three)
+Real-time space combat combining ship design, positioning, and fleet tactics with AI command and control.
 
-### 6. **Emergent Storytelling** (RimWorld)
+### 7. **Emergent Storytelling** (RimWorld)
 Random events, character relationships, and unpredictable challenges that create unique narratives.
 
 ---
@@ -225,6 +228,43 @@ Resource Management:          ├─ Mining
 
 ## Combat System
 
+### Two-Layer Combat System (Starsector-Inspired)
+
+#### Campaign Map Layer
+The strategic layer where fleet movement, exploration, and engagement decisions occur:
+
+- **Continuous Real-Time Movement**: Navigate through star systems and hyperspace in real-time
+- **Time Compression**: Pause or speed up (Shift key) to manage long-distance travel
+- **Fleet Speed**: Affected by ship composition, navigation skills, terrain, and gravity wells
+- **Engagement Control**: 
+  - Speed advantage allows forcing engagement or escaping
+  - Pre-battle screen to select deployed ships and assign officers
+  - Choose to fight, retreat (if possible), or surrender
+
+**Campaign Map Controls:**
+```
+Campaign Navigation:
+├─ A                : Open/close sector map
+├─ Shift (hold)     : Increase time compression
+├─ S (hold)         : Slow down or stop fleet
+├─ Left Click (hold): Manually steer towards cursor
+└─ Right Click (map): Set destination waypoint
+```
+
+#### Tactical Combat Arena
+Separate 2D physics-based battlefield that loads when engagement begins:
+
+- **Strategic Battlefield Elements**:
+  - Strategic points (buoys, jammers) provide fleet-wide bonuses when captured
+  - Asteroid fields and nebulae affect movement and visibility
+  - Terrain provides tactical positioning opportunities
+
+- **Command Point System**:
+  - Pause battle to issue complex orders using Command Points (CP)
+  - Orders: attack specific target, defend location/ally, move to waypoint
+  - CPs regenerate over time for dynamic battle control
+  - Reduces micro-management while maintaining strategic depth
+
 ### Real-Time Tactical Combat
 
 Combines best elements from all three games:
@@ -258,10 +298,11 @@ Rock-Paper-Scissors System:
 ```
 
 #### Combat Readiness
-- **Flux System**: Heat management (Starsector-style)
+- **Combat Readiness (CR)**: Ships lose CR over time without maintenance; low CR increases malfunction chance
 - **Power Distribution**: Allocate to weapons, shields, engines
 - **Emergency Repairs**: Crew fixes systems during battle
 - **Morale**: Affects performance, can cause retreats
+- **Malfunction System**: Low CR can cause weapon jams, engine failures during combat
 
 #### Environmental Factors
 - **Asteroid Fields**: Provide cover, navigation hazards
@@ -465,7 +506,35 @@ Fleet Management:
 ├─ A                : Attack order
 ├─ D                : Defend position
 ├─ R                : Retreat order
-└─ G                : Gather/Salvage order
+├─ G                : Gather/Salvage order
+└─ Tab              : Toggle flagship control / tactical map
+```
+
+#### Tactical Combat Controls (Starsector-Style)
+```
+Flagship Direct Control:
+├─ W/S              : Accelerate forward/reverse
+├─ A/D              : Turn left/right
+├─ Shift+A/D        : Strafe while facing cursor
+├─ C                : Full stop/decelerate
+├─ Left Click       : Fire selected weapon group
+├─ Right Click      : Raise shields (hold)
+├─ 1,2,3...         : Select weapon groups
+├─ Ctrl+(Number)    : Toggle autofire for group
+├─ R                : Target specific enemy/module
+├─ F                : Activate ship special ability
+├─ Z                : Toggle fighters Engage/Regroup
+└─ Tab              : Switch flagship/tactical command
+```
+
+#### Command Point System
+```
+Tactical Command (Pause + Orders):
+├─ Spacebar         : Pause battle
+├─ Click Ship       : Select allied ship
+├─ Right Click      : Issue order (attack/defend/move)
+├─ CP Cost          : Each order consumes Command Points
+└─ CP Regen         : Points regenerate during battle
 ```
 
 #### Building Controls
@@ -560,18 +629,46 @@ Hotkeys:
 - ⬜ Component variety expansion
 - ⬜ Save/load system
 - ⬜ Basic menu system
+- ⬜ Campaign map prototype (basic navigation)
 
-### Phase 2: Fleet Mechanics (3-6 months)
+### Phase 2: Two-Layer System & Fleet Mechanics (3-6 months)
+**Campaign Map Layer**
+- ⬜ Strategic campaign map with real-time movement
+- ⬜ Time compression controls (pause/speed up)
+- ⬜ Fleet movement on map with speed factors
+- ⬜ Engagement initiation system
+- ⬜ Pre-battle deployment screen
+- ⬜ Hyperspace travel system
+- ⬜ Basic galaxy/sector map
+
 **Fleet Management**
 - ⬜ Multiple ship control
-- ⬜ Officer system
+- ⬜ Officer system with assignments
 - ⬜ Fleet formations
 - ⬜ Supply and logistics
 - ⬜ Ship classes and roles
-- ⬜ Hyperspace travel
-- ⬜ Basic galaxy map
+- ⬜ Combat Readiness (CR) system
 
-### Phase 3: Economy & Trade (6-9 months)
+### Phase 3: Tactical Combat Arena & AI Command (6-9 months)
+**Tactical Combat Layer**
+- ⬜ Separate 2D physics-based battlefield
+- ⬜ Transition from campaign map to battle
+- ⬜ Strategic points system (buoys, jammers, bonuses)
+- ⬜ Terrain effects (asteroids, nebulae)
+- ⬜ Tab toggle between flagship and tactical command
+- ⬜ Command Point (CP) system
+- ⬜ Pause + issue orders interface
+- ⬜ CP regeneration and order costs
+- ⬜ AI execution of player orders
+
+**Enhanced Combat**
+- ⬜ Weapon group selection
+- ⬜ Autofire toggles per weapon group
+- ⬜ Shield management system
+- ⬜ Ship special abilities
+- ⬜ Fighter wing controls
+
+### Phase 4: Economy & Trade (9-12 months)
 **Economic Systems**
 - ⬜ Market simulation
 - ⬜ Trade routes
@@ -581,7 +678,7 @@ Hotkeys:
 - ⬜ Economic events
 - ⬜ Smuggling mechanics
 
-### Phase 4: Colonies (9-12 months)
+### Phase 5: Colonies (12-15 months)
 **Base Building**
 - ⬜ Station construction
 - ⬜ Resource production
@@ -591,7 +688,7 @@ Hotkeys:
 - ⬜ Random events
 - ⬜ Colony progression
 
-### Phase 5: Exploration (12-15 months)
+### Phase 6: Exploration (15-18 months)
 **Galaxy Content**
 - ⬜ Procedural generation
 - ⬜ Derelict ships and stations
@@ -601,15 +698,23 @@ Hotkeys:
 - ⬜ Side quests
 - ⬜ End-game content
 
-### Phase 6: Polish & Release (15-18 months)
-**Final Features**
+### Phase 7: Modding & Polish (18-21 months)
+**Modding Framework**
+- ⬜ JSON-based mod configuration system
+- ⬜ Custom ship blueprint support
+- ⬜ Event scripting API
+- ⬜ Asset replacement system
+- ⬜ Workshop integration (Steam/etc)
+- ⬜ Mod load order management
+- ⬜ Documentation for modders
+
+**Final Polish**
 - ⬜ Full tutorial system
-- ⬜ Comprehensive UI/UX
+- ⬜ Comprehensive UI/UX polish
 - ⬜ Sound effects and music
 - ⬜ Performance optimization
 - ⬜ Balance pass
 - ⬜ Achievement system
-- ⬜ Modding support
 - ⬜ Localization
 
 ---
@@ -618,24 +723,27 @@ Hotkeys:
 
 ### Must Have (Core Experience)
 1. Ship building with variety of components
-2. Direct ship control in combat
-3. Fleet command basics
-4. Save/load system
-5. Simple economy/trading
-6. Basic colony mechanics
+2. Two-layer gameplay (campaign map + tactical combat arena)
+3. Direct flagship control with Tab toggle
+4. Command Point system for fleet orders
+5. Fleet command basics with officers
+6. Save/load system
+7. Simple economy/trading
+8. Basic colony mechanics
 
 ### Should Have (Enhanced Experience)
-1. Officer system
-2. Research/progression
-3. Multiple game modes
-4. Emergent events
-5. Faction system
-6. Advanced UI
+1. Strategic points and terrain effects in combat
+2. Combat Readiness (CR) system
+3. Research/progression
+4. Multiple game modes
+5. Emergent events
+6. Faction system
+7. Advanced UI
 
 ### Nice to Have (Polish)
-1. Modding support
-2. Multiplayer (future consideration)
-3. Steam Workshop integration
+1. Robust modding support framework
+2. Steam Workshop integration
+3. Multiplayer (future consideration)
 4. Achievements
 5. Leaderboards
 6. Advanced graphics options
@@ -690,11 +798,14 @@ Hotkeys:
 - **Future**: Mobile ports (scaled down)
 
 ### Modding Support
-- JSON-based configuration
-- Custom ship blueprints
-- Event scripting
-- Asset replacement
-- Workshop integration
+Robust modding framework designed from the ground up:
+- **JSON-based configuration**: Easy-to-edit game data files
+- **Custom ship blueprints**: Community-created ship designs
+- **Event scripting API**: Create custom missions and random events
+- **Asset replacement**: Custom textures, sounds, UI elements
+- **Workshop integration**: Steam Workshop or equivalent for easy mod sharing
+- **Mod compatibility**: Load order management and conflict resolution
+- **Documentation**: Comprehensive modding guide and API reference
 
 ---
 
