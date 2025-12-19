@@ -136,8 +136,16 @@ public class Component
             Cooldown = 1.5f;  // Slower but more powerful
     }
 
+    private float GetHealthPercent()
+    {
+        return Stats.MaxHealth > 0 ? (float)Stats.Health / Stats.MaxHealth : 1.0f;
+    }
+
     public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, int x, int y, int gridSize, Dictionary<string, Texture2D>? componentTextures = null)
     {
+        // Get health percentage for damage indication
+        float healthPercent = GetHealthPercent();
+        
         // Try to use texture if available
         if (componentTextures != null && componentTextures.TryGetValue(ComponentType, out Texture2D? texture))
         {
@@ -145,7 +153,6 @@ public class Component
             Rectangle destRect = new Rectangle(x, y, gridSize - 2, gridSize - 2);
             
             // Damage indicator (darken based on health)
-            float healthPercent = Stats.MaxHealth > 0 ? (float)Stats.Health / Stats.MaxHealth : 1.0f;
             Color tintColor = new Color(
                 (int)(255 * (0.3f + 0.7f * healthPercent)),
                 (int)(255 * (0.3f + 0.7f * healthPercent)),
@@ -159,9 +166,6 @@ public class Component
         // Fallback to original rendering if texture not available
         // Base color
         Color baseColor = Stats.Color;
-
-        // Damage indicator (darken based on health)
-        float healthPercent2 = Stats.MaxHealth > 0 ? (float)Stats.Health / Stats.MaxHealth : 1.0f;
         
         // Draw component with gradient effect (darker at edges, lighter in center)
         Rectangle rect = new Rectangle(x, y, gridSize - 2, gridSize - 2);
@@ -175,9 +179,9 @@ public class Component
         {
             float layerFactor = layer / 3f;
             Color layerColor = new Color(
-                (int)(baseColor.R * (0.3f + 0.7f * healthPercent2) * (0.6f + 0.4f * layerFactor)),
-                (int)(baseColor.G * (0.3f + 0.7f * healthPercent2) * (0.6f + 0.4f * layerFactor)),
-                (int)(baseColor.B * (0.3f + 0.7f * healthPercent2) * (0.6f + 0.4f * layerFactor))
+                (int)(baseColor.R * (0.3f + 0.7f * healthPercent) * (0.6f + 0.4f * layerFactor)),
+                (int)(baseColor.G * (0.3f + 0.7f * healthPercent) * (0.6f + 0.4f * layerFactor)),
+                (int)(baseColor.B * (0.3f + 0.7f * healthPercent) * (0.6f + 0.4f * layerFactor))
             );
             
             Rectangle layerRect = new Rectangle(
@@ -190,8 +194,8 @@ public class Component
         }
         
         // Draw glowing border for active components
-        Color borderColor = healthPercent2 > 0.7f ? new Color(255, 255, 255, 200) : 
-                           healthPercent2 > 0.3f ? new Color(255, 200, 100, 180) : 
+        Color borderColor = healthPercent > 0.7f ? new Color(255, 255, 255, 200) : 
+                           healthPercent > 0.3f ? new Color(255, 200, 100, 180) : 
                            new Color(255, 100, 100, 160);
         DrawRectangle(spriteBatch, pixelTexture, rect, borderColor, 1);
         
