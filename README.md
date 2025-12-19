@@ -1,9 +1,9 @@
 # Subspace
-A Cosmoteer-inspired spaceship building and combat game
+A Cosmoteer-inspired spaceship building and combat game built with MonoGame
 
 ## Play the Game!
 
-🎮 **The game is fully playable!** You can launch the game using our streamlined launcher scripts or manually navigate to the `game/` directory.
+🎮 **The game is fully playable!** You can launch the game using our streamlined launcher scripts.
 
 ### Quick Launch (Recommended)
 
@@ -18,19 +18,26 @@ launch.bat
 ```
 
 The launcher scripts will automatically:
-- Check for Python installation
-- Install pygame if not already installed
+- Check for .NET SDK installation
+- Build the MonoGame project
 - Launch the game
 
 ### Manual Launch
 
-Navigate to the `game/` directory and follow the instructions in [game/README.md](game/README.md)
+You can also build and run the game manually:
 
 ```bash
-cd game
-pip install pygame
-python3 main.py
+# Build the project
+dotnet build
+
+# Run the game
+dotnet run
 ```
+
+### Requirements
+
+- **.NET SDK 6.0 or later** - [Download here](https://dotnet.microsoft.com/download)
+- **MonoGame** (installed automatically via NuGet)
 
 ## Features
 
@@ -58,17 +65,38 @@ The game features:
 
 ## Built With
 
-- Python 3
-- Pygame
+- C# / .NET 9.0
+- MonoGame 3.8 (Cross-platform game framework)
+
+## 🎉 Recent Update: MonoGame Migration
+
+**December 19, 2025** - Subspace has been successfully migrated from Python/Pygame to C#/MonoGame!
+
+**Benefits:**
+- ⚡ **Better Performance** - Smoother gameplay with more particles and effects
+- 🚀 **Cross-Platform** - Deploy to Windows, Linux, macOS, mobile, and consoles
+- 🎮 **Professional Framework** - Same technology used in Stardew Valley and Celeste
+- 📈 **Scalability** - Ready for advanced features and larger ships
+
+The legacy Python/Pygame code is preserved in the `game/` directory for reference.
 
 ## Documentation
 
-- **[game/README.md](game/README.md)** - How to install and play
+### Getting Started
+- **[BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md)** - How to build and run the game
 - **[GAMEPLAY.md](GAMEPLAY.md)** - Complete gameplay guide with strategies
-- **[ROADMAP.md](ROADMAP.md)** - Future development plans and feature roadmap
+
+### Development
+- **[MONOGAME_MIGRATION.md](MONOGAME_MIGRATION.md)** - Technical details of the migration
+- **[ROADMAP.md](ROADMAP.md)** - Future development plans (updated for MonoGame)
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
+
+### Resources
 - **[OPEN_SOURCE_RESOURCES.md](OPEN_SOURCE_RESOURCES.md)** - Guide to game dev tools and libraries
 - **[QUICK_START.md](QUICK_START.md)** - Quick start guides for various engines
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
+
+### Legacy
+- **[game/LEGACY_NOTICE.md](game/LEGACY_NOTICE.md)** - About the legacy Python/Pygame version
 
 ## License
 
