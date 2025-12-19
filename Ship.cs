@@ -325,7 +325,7 @@ public class Ship
         graphicsDevice.SetRenderTarget(shipSurface);
         graphicsDevice.Clear(Color.Transparent);
 
-        spriteBatch.Begin();
+        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
         foreach (var comp in Components)
         {
             int compX = comp.GridX * Config.GRID_SIZE;
