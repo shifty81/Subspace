@@ -24,6 +24,7 @@ public class Game1 : Game
 
     // Game objects
     private Starfield? _starfield;
+    private NebulaSystem? _nebulas;
     private ParticleSystem? _particles;
     private Ship? _player;
     private List<Ship> _enemies = new List<Ship>();
@@ -63,6 +64,7 @@ public class Game1 : Game
 
         // Initialize game objects
         _starfield = new Starfield();
+        _nebulas = new NebulaSystem();
         _particles = new ParticleSystem();
 
         InitGame();
@@ -221,7 +223,7 @@ public class Game1 : Game
         KeyboardState keyboardState = Keyboard.GetState();
 
         if (keyboardState.IsKeyDown(Keys.W) || keyboardState.IsKeyDown(Keys.Up))
-            _player.ApplyThrust(dt);
+            _player.ApplyThrust(dt, _particles);
 
         if (keyboardState.IsKeyDown(Keys.A) || keyboardState.IsKeyDown(Keys.Left))
             _player.Rotate(-1, dt);
@@ -328,8 +330,11 @@ public class Game1 : Game
 
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
 
-        // Draw starfield
+        // Draw starfield (deepest layer)
         _starfield?.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, _gameTime);
+
+        // Draw nebulas (middle background layer)
+        _nebulas?.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY);
 
         // Draw particles (background layer)
         _particles?.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);

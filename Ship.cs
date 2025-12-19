@@ -200,13 +200,35 @@ public class Ship
         }
     }
 
-    public void ApplyThrust(float dt)
+    public void ApplyThrust(float dt, ParticleSystem? particles = null)
     {
         if (TotalThrust > 0 && PowerAvailable >= PowerUsed)
         {
             float thrustForce = TotalThrust * dt;
             VX += (float)Math.Cos(Angle) * thrustForce;
             VY += (float)Math.Sin(Angle) * thrustForce;
+            
+            // Create engine thrust particles
+            if (particles != null)
+            {
+                var engines = Components.Where(c => c.ComponentType == ComponentType.ENGINE && c.Stats.Health > 0);
+                foreach (var engine in engines)
+                {
+                    // Calculate engine position in world space
+                    float localX = (engine.GridX - GridWidth / 2f) * Config.GRID_SIZE;
+                    float localY = (engine.GridY - GridHeight / 2f) * Config.GRID_SIZE;
+                    
+                    float cosAngle = (float)Math.Cos(-Angle);
+                    float sinAngle = (float)Math.Sin(-Angle);
+                    float rotatedX = localX * cosAngle - localY * sinAngle;
+                    float rotatedY = localX * sinAngle + localY * cosAngle;
+                    
+                    float engineX = X + rotatedX;
+                    float engineY = Y + rotatedY;
+                    
+                    particles.CreateEngineTrust(engineX, engineY, Angle, TotalThrust / 1000f);
+                }
+            }
         }
     }
 
