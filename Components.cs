@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
+using System.Collections.Generic;
 
 namespace Subspace;
 
@@ -135,13 +136,43 @@ public class Component
             Cooldown = 1.5f;  // Slower but more powerful
     }
 
-    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, int x, int y, int gridSize)
+    private float GetHealthPercent()
     {
+        if (Stats.MaxHealth <= 0) return 1.0f;
+        float percent = (float)Stats.Health / Stats.MaxHealth;
+        return Math.Max(0f, Math.Min(1f, percent)); // Clamp to [0, 1]
+    }
+    
+    private Color GetDamageTintColor(float healthPercent)
+    {
+        return new Color(
+            (int)(255 * (0.3f + 0.7f * healthPercent)),
+            (int)(255 * (0.3f + 0.7f * healthPercent)),
+            (int)(255 * (0.3f + 0.7f * healthPercent))
+        );
+    }
+
+    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, int x, int y, int gridSize, Dictionary<string, Texture2D>? componentTextures = null)
+    {
+        // Get health percentage for damage indication
+        float healthPercent = GetHealthPercent();
+        
+        // Try to use texture if available
+        if (componentTextures != null && componentTextures.TryGetValue(ComponentType, out Texture2D? texture))
+        {
+            // Draw component texture
+            Rectangle destRect = new Rectangle(x, y, gridSize - 2, gridSize - 2);
+            
+            // Damage indicator (darken based on health)
+            Color tintColor = GetDamageTintColor(healthPercent);
+            
+            spriteBatch.Draw(texture, destRect, tintColor);
+            return;
+        }
+        
+        // Fallback to original rendering if texture not available
         // Base color
         Color baseColor = Stats.Color;
-
-        // Damage indicator (darken based on health)
-        float healthPercent = (float)Stats.Health / Stats.MaxHealth;
         
         // Draw component with gradient effect (darker at edges, lighter in center)
         Rectangle rect = new Rectangle(x, y, gridSize - 2, gridSize - 2);

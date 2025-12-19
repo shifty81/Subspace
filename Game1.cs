@@ -12,6 +12,9 @@ public class Game1 : Game
     private GraphicsDeviceManager _graphics;
     private SpriteBatch _spriteBatch;
     private Texture2D _pixelTexture;
+    
+    // Component textures
+    private Dictionary<string, Texture2D> _componentTextures = new Dictionary<string, Texture2D>();
 
     // Game state
     private string _mode = Config.MODE_PLAY;
@@ -100,6 +103,29 @@ public class Game1 : Game
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
+        
+        // Load component textures
+        try
+        {
+            _componentTextures[ComponentType.CORE] = Content.Load<Texture2D>("Sprites/component_core");
+            _componentTextures[ComponentType.ENGINE] = Content.Load<Texture2D>("Sprites/component_engine");
+            _componentTextures[ComponentType.WEAPON_LASER] = Content.Load<Texture2D>("Sprites/component_weapon_laser");
+            _componentTextures[ComponentType.WEAPON_CANNON] = Content.Load<Texture2D>("Sprites/component_weapon_cannon");
+            _componentTextures[ComponentType.ARMOR] = Content.Load<Texture2D>("Sprites/component_armor");
+            _componentTextures[ComponentType.POWER] = Content.Load<Texture2D>("Sprites/component_power");
+            _componentTextures[ComponentType.SHIELD] = Content.Load<Texture2D>("Sprites/component_shield");
+            _componentTextures[ComponentType.CREW_QUARTERS] = Content.Load<Texture2D>("Sprites/component_crew_quarters");
+            _componentTextures[ComponentType.AMMO_FACTORY] = Content.Load<Texture2D>("Sprites/component_ammo_factory");
+            _componentTextures[ComponentType.CORRIDOR] = Content.Load<Texture2D>("Sprites/component_corridor");
+            _componentTextures[ComponentType.STRUCTURE] = Content.Load<Texture2D>("Sprites/component_structure");
+            _componentTextures[ComponentType.ENGINE_ROOM] = Content.Load<Texture2D>("Sprites/component_engine_room");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Could not load component textures: {ex.Message}");
+            Console.WriteLine("Falling back to simple rendering.");
+        }
+        
         // Note: In a real game, you would load a font from Content pipeline
         // For now, we'll skip text rendering or use a basic approach
     }
@@ -349,11 +375,11 @@ public class Game1 : Game
 
         // Draw player
         if (_player != null)
-            _player.Render(_spriteBatch, _pixelTexture, _shipRenderTarget, _cameraX, _cameraY, GraphicsDevice);
+            _player.Render(_spriteBatch, _pixelTexture, _shipRenderTarget, _cameraX, _cameraY, GraphicsDevice, _componentTextures);
 
         // Draw enemies
         foreach (var enemy in _enemies)
-            enemy.Render(_spriteBatch, _pixelTexture, _shipRenderTarget, _cameraX, _cameraY, GraphicsDevice);
+            enemy.Render(_spriteBatch, _pixelTexture, _shipRenderTarget, _cameraX, _cameraY, GraphicsDevice, _componentTextures);
 
         // Draw projectiles
         foreach (var proj in _projectiles)
