@@ -42,6 +42,11 @@ public static class ComponentType
     public const string ARMOR = "armor";
     public const string POWER = "power";
     public const string SHIELD = "shield";
+    public const string CREW_QUARTERS = "crew_quarters";
+    public const string AMMO_FACTORY = "ammo_factory";
+    public const string CORRIDOR = "corridor";
+    public const string STRUCTURE = "structure";
+    public const string ENGINE_ROOM = "engine_room";
 }
 
 /// <summary>
@@ -84,6 +89,16 @@ public class Component
                 "Reactor", 80, 80, 0, 100, 0f, new Color(0, 255, 100)),
             Subspace.ComponentType.SHIELD => new ComponentStats(
                 "Shield", 30, 30, 25, 0, 0f, new Color(100, 200, 255)),
+            Subspace.ComponentType.CREW_QUARTERS => new ComponentStats(
+                "Crew Quarters", 60, 60, 0, 0, 0f, new Color(180, 180, 255)),
+            Subspace.ComponentType.AMMO_FACTORY => new ComponentStats(
+                "Ammo Factory", 70, 70, 20, 0, 0f, new Color(200, 150, 50)),
+            Subspace.ComponentType.CORRIDOR => new ComponentStats(
+                "Corridor", 30, 30, 0, 0, 0f, new Color(100, 100, 100)),
+            Subspace.ComponentType.STRUCTURE => new ComponentStats(
+                "Structure", 40, 40, 0, 0, 0f, new Color(80, 80, 80)),
+            Subspace.ComponentType.ENGINE_ROOM => new ComponentStats(
+                "Engine Room", 80, 80, 15, 0, 0f, new Color(50, 100, 200)),
             _ => new ComponentStats("Unknown", 50, 50, 0)
         };
     }
@@ -123,40 +138,147 @@ public class Component
     public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, int x, int y, int gridSize)
     {
         // Base color
-        Color color = Stats.Color;
+        Color baseColor = Stats.Color;
 
         // Damage indicator (darken based on health)
         float healthPercent = (float)Stats.Health / Stats.MaxHealth;
-        color = new Color(
-            (int)(color.R * (0.3f + 0.7f * healthPercent)),
-            (int)(color.G * (0.3f + 0.7f * healthPercent)),
-            (int)(color.B * (0.3f + 0.7f * healthPercent))
-        );
-
-        // Draw component background
+        
+        // Draw component with gradient effect (darker at edges, lighter in center)
         Rectangle rect = new Rectangle(x, y, gridSize - 2, gridSize - 2);
-        spriteBatch.Draw(pixelTexture, rect, color);
+        
+        // Draw shadow/depth effect
+        Rectangle shadowRect = new Rectangle(x + 2, y + 2, gridSize - 2, gridSize - 2);
+        spriteBatch.Draw(pixelTexture, shadowRect, Color.Black * 0.3f);
+        
+        // Draw gradient layers for depth
+        for (int layer = 3; layer >= 0; layer--)
+        {
+            float layerFactor = layer / 3f;
+            Color layerColor = new Color(
+                (int)(baseColor.R * (0.3f + 0.7f * healthPercent) * (0.6f + 0.4f * layerFactor)),
+                (int)(baseColor.G * (0.3f + 0.7f * healthPercent) * (0.6f + 0.4f * layerFactor)),
+                (int)(baseColor.B * (0.3f + 0.7f * healthPercent) * (0.6f + 0.4f * layerFactor))
+            );
+            
+            Rectangle layerRect = new Rectangle(
+                x + layer, 
+                y + layer, 
+                gridSize - 2 - layer * 2, 
+                gridSize - 2 - layer * 2
+            );
+            spriteBatch.Draw(pixelTexture, layerRect, layerColor);
+        }
+        
+        // Draw glowing border for active components
+        Color borderColor = healthPercent > 0.7f ? new Color(255, 255, 255, 200) : 
+                           healthPercent > 0.3f ? new Color(255, 200, 100, 180) : 
+                           new Color(255, 100, 100, 160);
+        DrawRectangle(spriteBatch, pixelTexture, rect, borderColor, 1);
+        
+        // Add inner highlight for depth
+        Rectangle highlightRect = new Rectangle(x + 3, y + 3, gridSize - 8, gridSize - 8);
+        DrawRectangle(spriteBatch, pixelTexture, highlightRect, Color.White * 0.2f, 1);
 
-        // Draw border
-        DrawRectangle(spriteBatch, pixelTexture, rect, Color.White, 1);
-
-        // Draw type indicator
+        // Draw type indicator with glow
         int centerX = x + gridSize / 2;
         int centerY = y + gridSize / 2;
 
         if (ComponentType == Subspace.ComponentType.CORE)
         {
+            // Core with glow effect
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 10, Color.Yellow * 0.3f);
             DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 8, Color.Yellow);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 4, Color.White);
         }
         else if (ComponentType == Subspace.ComponentType.ENGINE)
         {
-            DrawTriangle(spriteBatch, pixelTexture, centerX, centerY, 8, Color.White);
+            // Engine with thrust indicator
+            DrawTriangle(spriteBatch, pixelTexture, centerX, centerY, 10, new Color(100, 150, 255));
+            DrawTriangle(spriteBatch, pixelTexture, centerX, centerY, 7, Color.White);
         }
-        else if (ComponentType == Subspace.ComponentType.WEAPON_LASER || 
-                 ComponentType == Subspace.ComponentType.WEAPON_CANNON)
+        else if (ComponentType == Subspace.ComponentType.WEAPON_LASER)
         {
+            // Laser weapon with red glow
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 6, Color.Red * 0.4f);
             DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 4, Color.Red);
+            DrawLine(spriteBatch, pixelTexture, centerX, centerY, centerX, centerY - 12, 3, Color.Red * 0.5f);
             DrawLine(spriteBatch, pixelTexture, centerX, centerY, centerX, centerY - 10, 2, Color.Red);
+        }
+        else if (ComponentType == Subspace.ComponentType.WEAPON_CANNON)
+        {
+            // Cannon weapon with orange glow
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 7, Color.Orange * 0.4f);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 5, Color.Orange);
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 2, centerY - 14, 4, 12), Color.Orange * 0.6f, 1);
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 1, centerY - 13, 2, 11), Color.Yellow, 1);
+        }
+        else if (ComponentType == Subspace.ComponentType.POWER)
+        {
+            // Reactor with energy glow
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 9, Color.Green * 0.4f);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 6, Color.Green);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 3, Color.White);
+            // Energy bolts
+            DrawLine(spriteBatch, pixelTexture, centerX - 7, centerY, centerX - 3, centerY, 1, Color.LimeGreen);
+            DrawLine(spriteBatch, pixelTexture, centerX + 3, centerY, centerX + 7, centerY, 1, Color.LimeGreen);
+        }
+        else if (ComponentType == Subspace.ComponentType.SHIELD)
+        {
+            // Shield with cyan glow
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 10, Color.Cyan * 0.3f);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 7, Color.Cyan * 0.6f);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 5, Color.White);
+        }
+        else if (ComponentType == Subspace.ComponentType.ARMOR)
+        {
+            // Armor plates pattern
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 6, centerY - 6, 12, 12), Color.Gray, 2);
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 4, centerY - 4, 8, 8), Color.White * 0.5f, 1);
+        }
+        else if (ComponentType == Subspace.ComponentType.CREW_QUARTERS)
+        {
+            // Crew quarters with beds
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 8, centerY - 4, 6, 3), Color.White, 1);
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX + 2, centerY - 4, 6, 3), Color.White, 1);
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 8, centerY + 2, 6, 3), Color.White, 1);
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX + 2, centerY + 2, 6, 3), Color.White, 1);
+        }
+        else if (ComponentType == Subspace.ComponentType.AMMO_FACTORY)
+        {
+            // Ammo factory with crate symbol
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 6, centerY - 6, 12, 12), Color.Orange, 2);
+            DrawLine(spriteBatch, pixelTexture, centerX - 6, centerY, centerX + 6, centerY, 1, Color.Yellow);
+            DrawLine(spriteBatch, pixelTexture, centerX, centerY - 6, centerX, centerY + 6, 1, Color.Yellow);
+        }
+        else if (ComponentType == Subspace.ComponentType.CORRIDOR)
+        {
+            // Corridor - simple arrows showing flow
+            DrawLine(spriteBatch, pixelTexture, centerX - 8, centerY, centerX + 8, centerY, 2, Color.White * 0.6f);
+            DrawLine(spriteBatch, pixelTexture, centerX + 4, centerY - 3, centerX + 8, centerY, 1, Color.White);
+            DrawLine(spriteBatch, pixelTexture, centerX + 4, centerY + 3, centerX + 8, centerY, 1, Color.White);
+        }
+        else if (ComponentType == Subspace.ComponentType.STRUCTURE)
+        {
+            // Structure - simple frame
+            DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 8, centerY - 8, 16, 16), Color.Gray * 0.5f, 1);
+            DrawLine(spriteBatch, pixelTexture, centerX - 8, centerY - 8, centerX + 8, centerY + 8, 1, Color.Gray * 0.5f);
+            DrawLine(spriteBatch, pixelTexture, centerX + 8, centerY - 8, centerX - 8, centerY + 8, 1, Color.Gray * 0.5f);
+        }
+        else if (ComponentType == Subspace.ComponentType.ENGINE_ROOM)
+        {
+            // Engine room with gear symbol
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 8, Color.Blue * 0.4f);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 6, new Color(50, 100, 200));
+            // Gear teeth
+            for (int i = 0; i < 8; i++)
+            {
+                float angle = i * (float)Math.PI / 4;
+                int x1 = centerX + (int)(Math.Cos(angle) * 6);
+                int y1 = centerY + (int)(Math.Sin(angle) * 6);
+                int x2 = centerX + (int)(Math.Cos(angle) * 9);
+                int y2 = centerY + (int)(Math.Sin(angle) * 9);
+                DrawLine(spriteBatch, pixelTexture, x1, y1, x2, y2, 2, Color.White);
+            }
         }
     }
 

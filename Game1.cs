@@ -24,6 +24,7 @@ public class Game1 : Game
 
     // Game objects
     private Starfield? _starfield;
+    private NebulaSystem? _nebulas;
     private ParticleSystem? _particles;
     private Ship? _player;
     private List<Ship> _enemies = new List<Ship>();
@@ -63,6 +64,7 @@ public class Game1 : Game
 
         // Initialize game objects
         _starfield = new Starfield();
+        _nebulas = new NebulaSystem();
         _particles = new ParticleSystem();
 
         InitGame();
@@ -153,6 +155,14 @@ public class Game1 : Game
                 _builderSelectedType = ComponentType.POWER;
             else if (keyboardState.IsKeyDown(Keys.D6) && !_previousKeyboardState.IsKeyDown(Keys.D6))
                 _builderSelectedType = ComponentType.SHIELD;
+            else if (keyboardState.IsKeyDown(Keys.D7) && !_previousKeyboardState.IsKeyDown(Keys.D7))
+                _builderSelectedType = ComponentType.CREW_QUARTERS;
+            else if (keyboardState.IsKeyDown(Keys.D8) && !_previousKeyboardState.IsKeyDown(Keys.D8))
+                _builderSelectedType = ComponentType.AMMO_FACTORY;
+            else if (keyboardState.IsKeyDown(Keys.D9) && !_previousKeyboardState.IsKeyDown(Keys.D9))
+                _builderSelectedType = ComponentType.CORRIDOR;
+            else if (keyboardState.IsKeyDown(Keys.D0) && !_previousKeyboardState.IsKeyDown(Keys.D0))
+                _builderSelectedType = ComponentType.STRUCTURE;
 
             // Handle mouse clicks
             if (mouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released)
@@ -221,7 +231,7 @@ public class Game1 : Game
         KeyboardState keyboardState = Keyboard.GetState();
 
         if (keyboardState.IsKeyDown(Keys.W) || keyboardState.IsKeyDown(Keys.Up))
-            _player.ApplyThrust(dt);
+            _player.ApplyThrust(dt, _particles);
 
         if (keyboardState.IsKeyDown(Keys.A) || keyboardState.IsKeyDown(Keys.Left))
             _player.Rotate(-1, dt);
@@ -328,8 +338,11 @@ public class Game1 : Game
 
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
 
-        // Draw starfield
+        // Draw starfield (deepest layer)
         _starfield?.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, _gameTime);
+
+        // Draw nebulas (middle background layer)
+        _nebulas?.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY);
 
         // Draw particles (background layer)
         _particles?.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
@@ -370,12 +383,14 @@ public class Game1 : Game
         // Player stats
         DrawText($"Health: {_player.TotalHealth}/{_player.MaxHealth}", 10, 40, Color.Green);
         DrawText($"Power: {_player.PowerAvailable - _player.PowerUsed}/{_player.PowerAvailable}", 10, 60, Color.Cyan);
+        DrawText($"Crew: {_player.CrewManager?.GetWorkingCrew()}/{_player.CrewManager?.GetTotalCrew()} Working", 10, 80, Color.Yellow);
 
         // Builder mode UI
         if (_mode == Config.MODE_BUILD)
         {
-            DrawText("Selected: " + _builderSelectedType, 10, 90, Color.Yellow);
-            DrawText("1-6: Select component | Left Click: Add | Right Click: Remove", 10, 110, Color.White);
+            DrawText("Selected: " + _builderSelectedType, 10, 110, Color.Yellow);
+            DrawText("1-9,0: Select component | Left Click: Add | Right Click: Remove", 10, 130, Color.White);
+            DrawText("7:Quarters 8:Ammo 9:Corridor 0:Structure", 10, 150, Color.Gray);
         }
 
         // Controls

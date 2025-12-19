@@ -29,6 +29,8 @@ public class Ship
     public int PowerAvailable { get; private set; }
     public int PowerUsed { get; private set; }
     public float TotalThrust { get; private set; }
+    
+    public CrewManager? CrewManager { get; private set; }
 
     public Ship? Target { get; set; }
     public string AIState { get; set; } = "idle";
@@ -51,6 +53,12 @@ public class Ship
             CreateEnemyShip();
 
         RecalculateStats();
+        
+        // Initialize crew
+        CrewManager = new CrewManager(this);
+        // Start with 5 crew members for player, 3 for enemies
+        int crewCount = isPlayer ? 5 : 3;
+        CrewManager.AddCrew(crewCount, x, y);
     }
 
     private void CreatePlayerShip()
@@ -128,6 +136,9 @@ public class Ship
         foreach (var comp in Components)
             comp.Update(dt);
 
+        // Update crew
+        CrewManager?.Update(dt);
+
         // AI control
         if (!IsPlayer && target != null)
         {
@@ -200,13 +211,35 @@ public class Ship
         }
     }
 
-    public void ApplyThrust(float dt)
+    public void ApplyThrust(float dt, ParticleSystem? particles = null)
     {
         if (TotalThrust > 0 && PowerAvailable >= PowerUsed)
         {
             float thrustForce = TotalThrust * dt;
             VX += (float)Math.Cos(Angle) * thrustForce;
             VY += (float)Math.Sin(Angle) * thrustForce;
+            
+            // Create engine thrust particles
+            if (particles != null)
+            {
+                var engines = Components.Where(c => c.ComponentType == ComponentType.ENGINE && c.Stats.Health > 0);
+                foreach (var engine in engines)
+                {
+                    // Calculate engine position in world space
+                    float localX = (engine.GridX - GridWidth / 2f) * Config.GRID_SIZE;
+                    float localY = (engine.GridY - GridHeight / 2f) * Config.GRID_SIZE;
+                    
+                    float cosAngle = (float)Math.Cos(-Angle);
+                    float sinAngle = (float)Math.Sin(-Angle);
+                    float rotatedX = localX * cosAngle - localY * sinAngle;
+                    float rotatedY = localX * sinAngle + localY * cosAngle;
+                    
+                    float engineX = X + rotatedX;
+                    float engineY = Y + rotatedY;
+                    
+                    particles.CreateEngineThrust(engineX, engineY, Angle, TotalThrust / 1000f);
+                }
+            }
         }
     }
 
@@ -352,5 +385,8 @@ public class Ship
             SpriteEffects.None,
             0
         );
+        
+        // Draw crew members on top of ship
+        CrewManager?.Render(spriteBatch, pixelTexture, cameraX, cameraY);
     }
 }

@@ -118,81 +118,112 @@ public class ParticleSystem
     {
         if (weaponType == "laser")
         {
-            // Laser muzzle flash - bright and quick
-            for (int i = 0; i < 8; i++)
+            // Laser muzzle flash - bright and quick with glow
+            // Core bright particles
+            for (int i = 0; i < 12; i++)
             {
-                float speed = 30f + (float)random.NextDouble() * 30f;
-                float spread = -0.3f + (float)random.NextDouble() * 0.6f;
+                float speed = 40f + (float)random.NextDouble() * 40f;
+                float spread = -0.4f + (float)random.NextDouble() * 0.8f;
                 float particleAngle = angle + spread;
                 float vx = (float)Math.Cos(particleAngle) * speed;
                 float vy = (float)Math.Sin(particleAngle) * speed;
 
-                Color[] colors = { new Color(255, 100, 100), new Color(255, 150, 150), new Color(255, 200, 200) };
+                Color[] colors = { new Color(255, 50, 50), new Color(255, 100, 100), new Color(255, 150, 150), new Color(255, 200, 200) };
                 Color color = colors[random.Next(colors.Length)];
 
-                particles.Add(new Particle(x, y, vx, vy, 0.2f, 2f + (float)random.NextDouble() * 2f, color, true, true));
+                particles.Add(new Particle(x, y, vx, vy, 0.25f, 2f + (float)random.NextDouble() * 3f, color, true, true));
+            }
+            // Outer glow particles
+            for (int i = 0; i < 8; i++)
+            {
+                float speed = 20f + (float)random.NextDouble() * 30f;
+                float spread = -0.6f + (float)random.NextDouble() * 1.2f;
+                float particleAngle = angle + spread;
+                float vx = (float)Math.Cos(particleAngle) * speed;
+                float vy = (float)Math.Sin(particleAngle) * speed;
+
+                particles.Add(new Particle(x, y, vx, vy, 0.3f, 3f + (float)random.NextDouble() * 2f, 
+                    new Color(255, 100, 100, 150), true, true));
             }
         }
         else  // cannon
         {
-            // Cannon smoke and fire
-            for (int i = 0; i < 15; i++)
+            // Cannon smoke and fire - bigger blast
+            // Fire core
+            for (int i = 0; i < 20; i++)
             {
-                float speed = 20f + (float)random.NextDouble() * 30f;
-                float spread = -0.5f + (float)random.NextDouble() * 1.0f;
+                float speed = 25f + (float)random.NextDouble() * 40f;
+                float spread = -0.6f + (float)random.NextDouble() * 1.2f;
                 float particleAngle = angle + spread;
                 float vx = (float)Math.Cos(particleAngle) * speed;
                 float vy = (float)Math.Sin(particleAngle) * speed;
 
                 Color color;
-                if (random.NextDouble() < 0.6)
+                if (random.NextDouble() < 0.7)
                 {
-                    Color[] fireColors = { new Color(255, 200, 0), new Color(255, 150, 0), new Color(255, 100, 0) };
+                    Color[] fireColors = { new Color(255, 220, 0), new Color(255, 180, 0), new Color(255, 140, 0), new Color(255, 80, 0) };
                     color = fireColors[random.Next(fireColors.Length)];
                 }
                 else
                 {
-                    Color[] smokeColors = { new Color(100, 100, 100), new Color(150, 150, 150) };
+                    Color[] smokeColors = { new Color(120, 120, 120), new Color(150, 150, 150), new Color(180, 180, 180) };
                     color = smokeColors[random.Next(smokeColors.Length)];
                 }
 
-                particles.Add(new Particle(x, y, vx, vy, 0.3f + (float)random.NextDouble() * 0.2f, 
-                    3f + (float)random.NextDouble() * 3f, color, true, false));
+                particles.Add(new Particle(x, y, vx, vy, 0.35f + (float)random.NextDouble() * 0.25f, 
+                    3f + (float)random.NextDouble() * 4f, color, true, false));
+            }
+            // Shockwave ring
+            for (int i = 0; i < 8; i++)
+            {
+                float ringAngle = angle + (i / 8f) * (float)Math.PI * 2;
+                float speed = 60f;
+                float vx = (float)Math.Cos(ringAngle) * speed;
+                float vy = (float)Math.Sin(ringAngle) * speed;
+                
+                particles.Add(new Particle(x, y, vx, vy, 0.2f, 4f, new Color(255, 200, 100, 200), true, true));
             }
         }
     }
 
     public void CreateExplosion(float x, float y, string size = "medium")
     {
-        int numParticles;
+        int numParticles, numSparks;
         float minSpeed, maxSpeed, minSize, maxSize, minLifetime, maxLifetime;
 
         switch (size)
         {
             case "small":
-                numParticles = 20;
-                minSpeed = 50f; maxSpeed = 150f;
-                minSize = 2f; maxSize = 5f;
-                minLifetime = 0.3f; maxLifetime = 0.6f;
+                numParticles = 30;
+                numSparks = 15;
+                minSpeed = 60f; maxSpeed = 180f;
+                minSize = 2f; maxSize = 6f;
+                minLifetime = 0.3f; maxLifetime = 0.7f;
                 break;
             case "large":
-                numParticles = 50;
-                minSpeed = 80f; maxSpeed = 250f;
-                minSize = 4f; maxSize = 10f;
-                minLifetime = 0.5f; maxLifetime = 1.0f;
+                numParticles = 80;
+                numSparks = 40;
+                minSpeed = 100f; maxSpeed = 300f;
+                minSize = 5f; maxSize = 12f;
+                minLifetime = 0.6f; maxLifetime = 1.2f;
                 break;
             default:  // medium
-                numParticles = 35;
-                minSpeed = 60f; maxSpeed = 200f;
-                minSize = 3f; maxSize = 7f;
-                minLifetime = 0.4f; maxLifetime = 0.8f;
+                numParticles = 50;
+                numSparks = 25;
+                minSpeed = 80f; maxSpeed = 240f;
+                minSize = 3f; maxSize = 9f;
+                minLifetime = 0.4f; maxLifetime = 1.0f;
                 break;
         }
 
-        // Create explosion particles
+        // Create bright core flash
+        particles.Add(new Particle(x, y, 0, 0, 0.15f, maxSize * 3, Color.White, true, true));
+        particles.Add(new Particle(x, y, 0, 0, 0.2f, maxSize * 2.5f, new Color(255, 220, 100), true, true));
+
+        // Create explosion fire particles
         Color[] explosionColors = { 
-            new Color(255, 200, 0), new Color(255, 150, 0), new Color(255, 100, 0), 
-            new Color(255, 50, 0), new Color(200, 200, 200) 
+            new Color(255, 240, 100), new Color(255, 200, 50), new Color(255, 160, 30), 
+            new Color(255, 120, 0), new Color(255, 80, 0), new Color(255, 40, 0) 
         };
 
         for (int i = 0; i < numParticles; i++)
@@ -208,23 +239,37 @@ public class ParticleSystem
             particles.Add(new Particle(x, y, vx, vy, lifetime, particleSize, color, true, true));
         }
 
+        // Add flying sparks
+        Color[] sparkColors = { Color.White, Color.Yellow, new Color(255, 220, 150), new Color(255, 180, 100) };
+        for (int i = 0; i < numSparks; i++)
+        {
+            float angle = (float)(random.NextDouble() * Math.PI * 2);
+            float speed = maxSpeed * 0.8f + (float)random.NextDouble() * maxSpeed * 0.4f;
+            float vx = (float)Math.Cos(angle) * speed;
+            float vy = (float)Math.Sin(angle) * speed;
+            Color color = sparkColors[random.Next(sparkColors.Length)];
+
+            particles.Add(new Particle(x, y, vx, vy, 0.3f + (float)random.NextDouble() * 0.3f, 
+                1f + (float)random.NextDouble() * 2f, color, true, true, 100f));
+        }
+
         // Add smoke particles
-        Color[] smokeColors = { new Color(80, 80, 80), new Color(100, 100, 100), new Color(120, 120, 120) };
+        Color[] smokeColors = { new Color(60, 60, 60), new Color(90, 90, 90), new Color(120, 120, 120), new Color(150, 150, 150) };
         for (int i = 0; i < numParticles / 2; i++)
         {
             float angle = (float)(random.NextDouble() * Math.PI * 2);
-            float speed = 20f + (float)random.NextDouble() * 60f;
+            float speed = 30f + (float)random.NextDouble() * 80f;
             float vx = (float)Math.Cos(angle) * speed;
             float vy = (float)Math.Sin(angle) * speed;
             Color color = smokeColors[random.Next(smokeColors.Length)];
-            float lifetime = 0.5f + (float)random.NextDouble() * 0.7f;
+            float lifetime = 0.6f + (float)random.NextDouble() * 0.8f;
 
-            particles.Add(new Particle(x, y, vx, vy, lifetime, 4f + (float)random.NextDouble() * 4f, 
-                color, true, false, 20f));
+            particles.Add(new Particle(x, y, vx, vy, lifetime, 5f + (float)random.NextDouble() * 5f, 
+                color, true, false, 30f));
         }
     }
 
-    public void CreateEngineTrust(float x, float y, float angle, float power = 1.0f)
+    public void CreateEngineThrust(float x, float y, float angle, float power = 1.0f)
     {
         // Create 2-3 particles per frame when engine is active
         int numParticles = 2 + random.Next(2);
@@ -251,18 +296,34 @@ public class ParticleSystem
 
     public void CreateDamageSparks(float x, float y)
     {
-        for (int i = 0; i < 10; i++)
+        // Impact flash
+        particles.Add(new Particle(x, y, 0, 0, 0.1f, 6f, Color.White, true, true));
+        
+        // Sparks flying in all directions
+        for (int i = 0; i < 18; i++)
         {
             float angle = (float)(random.NextDouble() * Math.PI * 2);
-            float speed = 80f + (float)random.NextDouble() * 70f;
+            float speed = 100f + (float)random.NextDouble() * 100f;
             float vx = (float)Math.Cos(angle) * speed;
             float vy = (float)Math.Sin(angle) * speed;
 
-            Color[] colors = { Color.Yellow, new Color(255, 200, 0), Color.White };
+            Color[] colors = { Color.White, Color.Yellow, new Color(255, 220, 150), new Color(255, 180, 100), new Color(255, 140, 0) };
             Color color = colors[random.Next(colors.Length)];
 
-            particles.Add(new Particle(x, y, vx, vy, 0.2f + (float)random.NextDouble() * 0.2f, 
-                1f + (float)random.NextDouble() * 2f, color, true, true, 200f));
+            particles.Add(new Particle(x, y, vx, vy, 0.25f + (float)random.NextDouble() * 0.25f, 
+                1f + (float)random.NextDouble() * 2.5f, color, true, true, 250f));
+        }
+        
+        // Small debris
+        for (int i = 0; i < 6; i++)
+        {
+            float angle = (float)(random.NextDouble() * Math.PI * 2);
+            float speed = 50f + (float)random.NextDouble() * 60f;
+            float vx = (float)Math.Cos(angle) * speed;
+            float vy = (float)Math.Sin(angle) * speed;
+
+            particles.Add(new Particle(x, y, vx, vy, 0.4f + (float)random.NextDouble() * 0.3f, 
+                2f + (float)random.NextDouble() * 2f, new Color(100, 100, 100), true, false, 150f));
         }
     }
 

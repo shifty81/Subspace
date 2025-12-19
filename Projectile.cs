@@ -74,21 +74,33 @@ public class Projectile
         int screenX = (int)(X - cameraX);
         int screenY = (int)(Y - cameraY);
 
-        // Draw projectile with trail effect
+        // Draw projectile with enhanced trail effect
         if (ProjectileType == "laser")
         {
-            // Laser beam effect
-            int trailLength = 15;
+            // Laser beam effect with glow
+            int trailLength = 20;
             int endX = screenX - (int)(Math.Cos(Angle) * trailLength);
             int endY = screenY - (int)(Math.Sin(Angle) * trailLength);
-            DrawLine(spriteBatch, pixelTexture, endX, endY, screenX, screenY, 2, color);
-            DrawCircle(spriteBatch, pixelTexture, screenX, screenY, size, Color.White);
+            
+            // Outer glow
+            DrawLine(spriteBatch, pixelTexture, endX, endY, screenX, screenY, 5, color * 0.3f);
+            // Middle beam
+            DrawLine(spriteBatch, pixelTexture, endX, endY, screenX, screenY, 3, color * 0.7f);
+            // Core beam
+            DrawLine(spriteBatch, pixelTexture, endX, endY, screenX, screenY, 1, Color.White);
+            
+            // Bright head
+            DrawCircle(spriteBatch, pixelTexture, screenX, screenY, size + 2, color * 0.5f);
+            DrawCircle(spriteBatch, pixelTexture, screenX, screenY, size, color);
+            DrawCircle(spriteBatch, pixelTexture, screenX, screenY, size / 2, Color.White);
         }
         else
         {
-            // Cannon projectile
+            // Cannon projectile with glow
+            DrawCircle(spriteBatch, pixelTexture, screenX, screenY, size + 3, color * 0.4f);
             DrawCircle(spriteBatch, pixelTexture, screenX, screenY, size, color);
-            DrawCircle(spriteBatch, pixelTexture, screenX, screenY, size / 2, Color.Yellow);
+            DrawCircle(spriteBatch, pixelTexture, screenX, screenY, size - 2, Color.Yellow);
+            DrawCircle(spriteBatch, pixelTexture, screenX, screenY, size / 2, Color.White);
         }
     }
 
