@@ -13,10 +13,15 @@ class Star:
         self.size = size
         self.brightness = brightness
         self.depth = depth  # 0.0-1.0, lower = farther away
-        self.twinkle_offset = random.random() * 6.28  # Random phase for twinkling
+        self.twinkle_offset = random.random() * math.pi * 2  # Random phase for twinkling
 
 class Starfield:
     """Enhanced starfield with parallax scrolling"""
+    
+    # Twinkle animation constants
+    TWINKLE_SPEED = 2.0
+    TWINKLE_AMPLITUDE = 0.2
+    TWINKLE_BASE = 0.8
     
     def __init__(self):
         # Multiple layers for parallax effect
@@ -93,7 +98,7 @@ class Starfield:
                 # Only draw if on screen (with margin)
                 if -50 < screen_x < SCREEN_WIDTH + 50 and -50 < screen_y < SCREEN_HEIGHT + 50:
                     # Add subtle twinkling effect
-                    twinkle = math.sin(time * 2 + star.twinkle_offset) * 0.2 + 0.8
+                    twinkle = math.sin(time * self.TWINKLE_SPEED + star.twinkle_offset) * self.TWINKLE_AMPLITUDE + self.TWINKLE_BASE
                     brightness = int(star.brightness * twinkle)
                     brightness = max(0, min(255, brightness))
                     

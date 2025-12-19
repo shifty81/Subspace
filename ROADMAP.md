@@ -29,11 +29,11 @@ Goal: Make the game visually appealing with professional graphics
 - [ ] Asteroid fields and space debris
 
 #### 1.2 Particle Systems
-- [ ] Weapon fire particle effects (lasers, projectiles)
-- [ ] Explosion animations with debris
-- [ ] Engine thrust particles
+- [x] Weapon fire particle effects (lasers, projectiles)
+- [x] Explosion animations with debris
+- [x] Engine thrust particles
 - [ ] Shield impact effects
-- [ ] Damage sparks and fire effects
+- [x] Damage sparks and fire effects
 
 #### 1.3 Ship Graphics
 - [ ] Improved component sprites with more detail

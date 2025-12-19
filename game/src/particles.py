@@ -23,16 +23,21 @@ class Particle:
 class ParticleSystem:
     """Manages all particles in the game"""
     
+    # Particle physics constants
+    PARTICLE_DRAG = 0.98
+    
     def __init__(self):
         self.particles: List[Particle] = []
     
     def update(self, dt: float):
         """Update all particles"""
-        for particle in self.particles[:]:
+        # Iterate backwards to safely remove particles
+        for i in range(len(self.particles) - 1, -1, -1):
+            particle = self.particles[i]
             particle.lifetime -= dt
             
             if particle.lifetime <= 0:
-                self.particles.remove(particle)
+                self.particles.pop(i)
                 continue
             
             # Update position
@@ -44,8 +49,8 @@ class ParticleSystem:
                 particle.vy += particle.gravity * dt
             
             # Apply drag
-            particle.vx *= 0.98
-            particle.vy *= 0.98
+            particle.vx *= self.PARTICLE_DRAG
+            particle.vy *= self.PARTICLE_DRAG
     
     def render(self, surface: pygame.Surface, camera_x: float, camera_y: float):
         """Render all particles"""
@@ -71,16 +76,17 @@ class ParticleSystem:
                 size = particle.size * (particle.lifetime / particle.max_lifetime)
                 size = max(0.5, size)
             
-            # Create color with alpha
+            # Render particle
             color = particle.color
-            if alpha < 255:
-                # Use a temporary surface for alpha blending
+            if alpha < 250 and particle.fade:
+                # Use alpha blending for fading particles
                 temp_surface = pygame.Surface((int(size * 2 + 2), int(size * 2 + 2)), pygame.SRCALPHA)
                 color_with_alpha = (*color, alpha)
                 pygame.draw.circle(temp_surface, color_with_alpha, 
                                  (int(size + 1), int(size + 1)), int(size))
                 surface.blit(temp_surface, (screen_x - int(size + 1), screen_y - int(size + 1)))
             else:
+                # Direct rendering for fully opaque particles (faster)
                 pygame.draw.circle(surface, color, (screen_x, screen_y), int(size))
     
     def create_weapon_fire_effect(self, x: float, y: float, angle: float, weapon_type: str):
