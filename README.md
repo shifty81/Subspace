@@ -68,14 +68,35 @@ The game features:
 - C# / .NET 9.0
 - MonoGame 3.8 (Cross-platform game framework)
 
+## 🎉 Recent Update: MonoGame Migration
+
+**December 19, 2025** - Subspace has been successfully migrated from Python/Pygame to C#/MonoGame!
+
+**Benefits:**
+- ⚡ **Better Performance** - Smoother gameplay with more particles and effects
+- 🚀 **Cross-Platform** - Deploy to Windows, Linux, macOS, mobile, and consoles
+- 🎮 **Professional Framework** - Same technology used in Stardew Valley and Celeste
+- 📈 **Scalability** - Ready for advanced features and larger ships
+
+The legacy Python/Pygame code is preserved in the `game/` directory for reference.
+
 ## Documentation
 
-- **[game/README.md](game/README.md)** - How to install and play
+### Getting Started
+- **[BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md)** - How to build and run the game
 - **[GAMEPLAY.md](GAMEPLAY.md)** - Complete gameplay guide with strategies
-- **[ROADMAP.md](ROADMAP.md)** - Future development plans and feature roadmap
+
+### Development
+- **[MONOGAME_MIGRATION.md](MONOGAME_MIGRATION.md)** - Technical details of the migration
+- **[ROADMAP.md](ROADMAP.md)** - Future development plans (updated for MonoGame)
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
+
+### Resources
 - **[OPEN_SOURCE_RESOURCES.md](OPEN_SOURCE_RESOURCES.md)** - Guide to game dev tools and libraries
 - **[QUICK_START.md](QUICK_START.md)** - Quick start guides for various engines
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
+
+### Legacy
+- **[game/LEGACY_NOTICE.md](game/LEGACY_NOTICE.md)** - About the legacy Python/Pygame version
 
 ## License
 
