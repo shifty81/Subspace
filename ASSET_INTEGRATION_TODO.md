@@ -47,6 +47,7 @@ cp "Space ship assets to be added/Stars-Nebulae/"*.png Content/Sprites/
 **Action Steps:**
 ```bash
 # 1. Copy files to Content folder
+mkdir -p Content/Sprites/EnemyShips
 cp "Space ship assets to be added/Example_ships/"*.png Content/Sprites/EnemyShips/
 
 # 2. Add to Content.mgcb
@@ -116,15 +117,9 @@ enemy.PrerenderedSprite = $"EnemyShips/{spriteNumber}{variant}";
 # Install GIMP
 sudo apt install gimp
 
-# Batch conversion script
-for file in "Space ship assets to be added/Alien-Ships/"*.psd; do
-    gimp -i -b '(let* ((image (car (gimp-file-load RUN-NONINTERACTIVE "'$file'" "'$file'")))
-                       (drawable (car (gimp-image-merge-visible-layers image CLIP-TO-IMAGE))))
-                  (file-png-save RUN-NONINTERACTIVE image drawable 
-                                 "'${file%.psd}.png'" "'${file%.psd}.png'"
-                                 0 9 0 0 0 0 0)
-                  (gimp-image-delete image))' -b '(gimp-quit 0)'
-done
+# For batch conversion, ImageMagick is simpler (see below)
+# GIMP can be used interactively to open and export PSDs to PNG
+# File > Export As > Choose PNG format > Export
 ```
 
 **Or ImageMagick (simpler):**
@@ -141,6 +136,7 @@ done
 **Integration Steps:**
 ```bash
 # Copy converted PNGs to Content
+mkdir -p Content/Sprites/AlienShips
 cp "Space ship assets to be added/Alien-Ships/"*.png Content/Sprites/AlienShips/
 
 # Add to Content pipeline
@@ -173,14 +169,15 @@ public class SpriteAnimation
     public int FrameCount { get; set; }
     public int FrameWidth { get; set; }
     public int FrameHeight { get; set; }
+    public int FramesPerRow { get; set; }
     public float FrameDuration { get; set; }
     private float currentTime;
     private int currentFrame;
 
     public Rectangle GetCurrentFrameRect()
     {
-        int x = (currentFrame % framesPerRow) * FrameWidth;
-        int y = (currentFrame / framesPerRow) * FrameHeight;
+        int x = (currentFrame % FramesPerRow) * FrameWidth;
+        int y = (currentFrame / FramesPerRow) * FrameHeight;
         return new Rectangle(x, y, FrameWidth, FrameHeight);
     }
 
