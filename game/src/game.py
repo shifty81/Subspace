@@ -7,6 +7,7 @@ from .config import *
 from .ship import Ship
 from .projectile import Projectile
 from .components import Component, ComponentType
+from .starfield import Starfield
 
 class Game:
     """Main game class"""
@@ -20,10 +21,14 @@ class Game:
         # Game state
         self.mode = MODE_PLAY
         self.paused = False
+        self.game_time = 0  # Track time for animations
         
         # Camera
         self.camera_x = 0
         self.camera_y = 0
+        
+        # Enhanced starfield
+        self.starfield = Starfield()
         
         # Game objects
         self.player: Optional[Ship] = None
@@ -74,6 +79,7 @@ class Game:
             
             if not self.paused:
                 self._update(dt)
+                self.game_time += dt
             
             self._render()
         
@@ -235,8 +241,8 @@ class Game:
         # Clear screen
         self.screen.fill(BLACK)
         
-        # Draw starfield background
-        self._draw_starfield()
+        # Draw enhanced starfield background with parallax
+        self.starfield.render(self.screen, self.camera_x, self.camera_y, self.game_time)
         
         # Render game objects
         if self.player:
@@ -256,26 +262,6 @@ class Game:
             self._draw_builder_ui()
         
         pygame.display.flip()
-    
-    def _draw_starfield(self):
-        """Draw a simple starfield background"""
-        # Create pseudo-random stars based on camera position
-        star_density = 0.0005
-        num_stars = int(SCREEN_WIDTH * SCREEN_HEIGHT * star_density)
-        
-        for i in range(num_stars):
-            # Pseudo-random position based on camera and seed
-            seed = i * 12345
-            x = (seed * 17 + int(self.camera_x) // 10) % (SCREEN_WIDTH * 3)
-            y = (seed * 31 + int(self.camera_y) // 10) % (SCREEN_HEIGHT * 3)
-            
-            screen_x = x - (int(self.camera_x) % (SCREEN_WIDTH * 3))
-            screen_y = y - (int(self.camera_y) % (SCREEN_HEIGHT * 3))
-            
-            if 0 <= screen_x < SCREEN_WIDTH and 0 <= screen_y < SCREEN_HEIGHT:
-                brightness = (seed % 100) + 100
-                color = (brightness, brightness, brightness)
-                pygame.draw.circle(self.screen, color, (screen_x, screen_y), 1)
     
     def _draw_ui(self):
         """Draw main UI"""
