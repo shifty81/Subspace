@@ -64,3 +64,4 @@ Thumbs.db
 # Game specific
 game/assets/temp/
 *.pyc
+crash.log
