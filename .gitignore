@@ -1,4 +1,4 @@
-# Python
+# Python (legacy)
 __pycache__/
 *.py[cod]
 *$py.class
@@ -27,6 +27,28 @@ MANIFEST
 venv/
 ENV/
 env/
+
+# .NET / C# / MonoGame
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.cache
+*.csproj.user
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.mgcb.cache
+*.mgstats
 
 # IDE
 .vscode/

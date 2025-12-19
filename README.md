@@ -1,9 +1,9 @@
 # Subspace
-A Cosmoteer-inspired spaceship building and combat game
+A Cosmoteer-inspired spaceship building and combat game built with MonoGame
 
 ## Play the Game!
 
-🎮 **The game is fully playable!** You can launch the game using our streamlined launcher scripts or manually navigate to the `game/` directory.
+🎮 **The game is fully playable!** You can launch the game using our streamlined launcher scripts.
 
 ### Quick Launch (Recommended)
 
@@ -18,19 +18,26 @@ launch.bat
 ```
 
 The launcher scripts will automatically:
-- Check for Python installation
-- Install pygame if not already installed
+- Check for .NET SDK installation
+- Build the MonoGame project
 - Launch the game
 
 ### Manual Launch
 
-Navigate to the `game/` directory and follow the instructions in [game/README.md](game/README.md)
+You can also build and run the game manually:
 
 ```bash
-cd game
-pip install pygame
-python3 main.py
+# Build the project
+dotnet build
+
+# Run the game
+dotnet run
 ```
+
+### Requirements
+
+- **.NET SDK 6.0 or later** - [Download here](https://dotnet.microsoft.com/download)
+- **MonoGame** (installed automatically via NuGet)
 
 ## Features
 
@@ -58,8 +65,8 @@ The game features:
 
 ## Built With
 
-- Python 3
-- Pygame
+- C# / .NET 9.0
+- MonoGame 3.8 (Cross-platform game framework)
 
 ## Documentation
 
