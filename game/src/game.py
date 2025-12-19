@@ -8,6 +8,7 @@ from .ship import Ship
 from .projectile import Projectile
 from .components import Component, ComponentType
 from .starfield import Starfield
+from .particles import ParticleSystem
 
 class Game:
     """Main game class"""
@@ -29,6 +30,9 @@ class Game:
         
         # Enhanced starfield
         self.starfield = Starfield()
+        
+        # Particle system
+        self.particles = ParticleSystem()
         
         # Game objects
         self.player: Optional[Ship] = None
@@ -148,6 +152,9 @@ class Game:
     
     def _update(self, dt: float):
         """Update game state"""
+        # Always update particles
+        self.particles.update(dt)
+        
         if self.mode == MODE_PLAY:
             self._update_play_mode(dt)
         elif self.mode == MODE_BUILD:
@@ -173,6 +180,9 @@ class Game:
         if keys[pygame.K_SPACE]:
             projectiles = self.player.fire_weapons()
             self.projectiles.extend(projectiles)
+            # Create muzzle flash particles for each fired weapon
+            for proj in projectiles:
+                self.particles.create_weapon_fire_effect(proj.x, proj.y, proj.angle, proj.projectile_type)
         
         # Update player
         self.player.update(dt)
@@ -185,9 +195,14 @@ class Game:
             if random.random() < 0.02:  # 2% chance per frame
                 projectiles = enemy.fire_weapons()
                 self.projectiles.extend(projectiles)
+                # Create muzzle flash particles for enemy weapons
+                for proj in projectiles:
+                    self.particles.create_weapon_fire_effect(proj.x, proj.y, proj.angle, proj.projectile_type)
             
             # Remove destroyed enemies
             if enemy.is_destroyed():
+                # Create large explosion when ship is destroyed
+                self.particles.create_explosion(enemy.x, enemy.y, "large")
                 self.enemies.remove(enemy)
         
         # Update projectiles
@@ -203,6 +218,9 @@ class Game:
                 bounds = self.player.get_bounds()
                 if proj.check_collision(bounds):
                     self.player.take_damage(proj.damage, proj.x, proj.y)
+                    # Create impact effects
+                    self.particles.create_explosion(proj.x, proj.y, "small")
+                    self.particles.create_damage_sparks(proj.x, proj.y)
                     proj.alive = False
             
             # Check collision with enemies
@@ -211,6 +229,9 @@ class Game:
                     bounds = enemy.get_bounds()
                     if proj.check_collision(bounds):
                         enemy.take_damage(proj.damage, proj.x, proj.y)
+                        # Create impact effects
+                        self.particles.create_explosion(proj.x, proj.y, "small")
+                        self.particles.create_damage_sparks(proj.x, proj.y)
                         proj.alive = False
                         break
         
@@ -253,6 +274,9 @@ class Game:
         
         for proj in self.projectiles:
             proj.render(self.screen, self.camera_x, self.camera_y)
+        
+        # Render particles on top of everything else
+        self.particles.render(self.screen, self.camera_x, self.camera_y)
         
         # Draw UI
         self._draw_ui()

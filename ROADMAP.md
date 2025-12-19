@@ -23,8 +23,8 @@ This document outlines the planned features and improvements for the Subspace ga
 Goal: Make the game visually appealing with professional graphics
 
 #### 1.1 Space Environment
-- [ ] Enhanced starfield background with parallax scrolling
-- [ ] Nebula and space dust effects
+- [x] Enhanced starfield background with parallax scrolling
+- [x] Nebula and space dust effects
 - [ ] Dynamic lighting and ambient effects
 - [ ] Asteroid fields and space debris
 
@@ -177,4 +177,4 @@ This is a living roadmap. Features may be added, removed, or reprioritized based
 - Developer availability
 - Engine capabilities
 
-**Last Updated**: 2025-12-18
+**Last Updated**: 2025-12-19
