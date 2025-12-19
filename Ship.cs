@@ -318,11 +318,14 @@ public class Ship
         if (shipSurface == null)
             shipSurface = new RenderTarget2D(graphicsDevice, shipWidth, shipHeight);
 
+        // End the current spriteBatch before changing render targets
+        spriteBatch.End();
+
         // Render components on temporary surface
         graphicsDevice.SetRenderTarget(shipSurface);
         graphicsDevice.Clear(Color.Transparent);
 
-        spriteBatch.Begin();
+        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
         foreach (var comp in Components)
         {
             int compX = comp.GridX * Config.GRID_SIZE;
@@ -333,6 +336,9 @@ public class Ship
 
         // Reset render target
         graphicsDevice.SetRenderTarget(null);
+
+        // Restart spriteBatch for drawing to main surface
+        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
 
         // Draw rotated ship on main surface
         spriteBatch.Draw(
