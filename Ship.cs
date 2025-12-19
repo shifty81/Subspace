@@ -29,6 +29,8 @@ public class Ship
     public int PowerAvailable { get; private set; }
     public int PowerUsed { get; private set; }
     public float TotalThrust { get; private set; }
+    
+    public CrewManager? CrewManager { get; private set; }
 
     public Ship? Target { get; set; }
     public string AIState { get; set; } = "idle";
@@ -51,6 +53,12 @@ public class Ship
             CreateEnemyShip();
 
         RecalculateStats();
+        
+        // Initialize crew
+        CrewManager = new CrewManager(this);
+        // Start with 5 crew members for player, 3 for enemies
+        int crewCount = isPlayer ? 5 : 3;
+        CrewManager.AddCrew(crewCount, x, y);
     }
 
     private void CreatePlayerShip()
@@ -127,6 +135,9 @@ public class Ship
         // Update all components
         foreach (var comp in Components)
             comp.Update(dt);
+
+        // Update crew
+        CrewManager?.Update(dt);
 
         // AI control
         if (!IsPlayer && target != null)
@@ -374,5 +385,8 @@ public class Ship
             SpriteEffects.None,
             0
         );
+        
+        // Draw crew members on top of ship
+        CrewManager?.Render(spriteBatch, pixelTexture, cameraX, cameraY);
     }
 }
