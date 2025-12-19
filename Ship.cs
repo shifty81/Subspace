@@ -243,6 +243,40 @@ public class Ship
         }
     }
 
+    public void ApplyReverseThrust(float dt, ParticleSystem? particles = null)
+    {
+        if (TotalThrust > 0 && PowerAvailable >= PowerUsed)
+        {
+            // Apply 70% thrust in reverse direction
+            float thrustForce = TotalThrust * dt * 0.7f;
+            VX -= (float)Math.Cos(Angle) * thrustForce;
+            VY -= (float)Math.Sin(Angle) * thrustForce;
+            
+            // Create reverse thrust particles from front of ship
+            if (particles != null)
+            {
+                var engines = Components.Where(c => c.ComponentType == ComponentType.ENGINE && c.Stats.Health > 0);
+                foreach (var engine in engines)
+                {
+                    // Calculate position in front of ship for reverse thrust
+                    float localX = (engine.GridX - GridWidth / 2f) * Config.GRID_SIZE;
+                    float localY = (engine.GridY - GridHeight / 2f) * Config.GRID_SIZE;
+                    
+                    float cosAngle = (float)Math.Cos(-Angle);
+                    float sinAngle = (float)Math.Sin(-Angle);
+                    float rotatedX = localX * cosAngle - localY * sinAngle;
+                    float rotatedY = localX * sinAngle + localY * cosAngle;
+                    
+                    float engineX = X + rotatedX;
+                    float engineY = Y + rotatedY;
+                    
+                    // Particles go forward (opposite of ship movement)
+                    particles.CreateEngineThrust(engineX, engineY, Angle + (float)Math.PI, TotalThrust / 1500f);
+                }
+            }
+        }
+    }
+
     public void Rotate(int direction, float dt)
     {
         float rotationSpeed = 3.0f;
@@ -276,6 +310,45 @@ public class Ship
                 float speed = projType == "laser" ? 500f : 350f;
 
                 var projectile = new Projectile(spawnX, spawnY, Angle, speed, damage, projType, ShipId);
+                projectiles.Add(projectile);
+            }
+        }
+
+        return projectiles;
+    }
+
+    public List<Projectile> FireWeaponsAtTarget(Vector2 targetPosition)
+    {
+        var projectiles = new List<Projectile>();
+
+        foreach (var comp in Components)
+        {
+            if (comp.CanFire() && PowerAvailable >= PowerUsed)
+            {
+                comp.Fire();
+
+                // Calculate projectile spawn position (in world space)
+                float localX = (comp.GridX - GridWidth / 2f) * Config.GRID_SIZE;
+                float localY = (comp.GridY - GridHeight / 2f) * Config.GRID_SIZE;
+
+                // Rotate by ship angle
+                float rotatedX = localX * (float)Math.Cos(Angle) - localY * (float)Math.Sin(Angle);
+                float rotatedY = localX * (float)Math.Sin(Angle) + localY * (float)Math.Cos(Angle);
+
+                float spawnX = X + rotatedX;
+                float spawnY = Y + rotatedY;
+
+                // Calculate angle to target
+                float dx = targetPosition.X - spawnX;
+                float dy = targetPosition.Y - spawnY;
+                float targetAngle = (float)Math.Atan2(dy, dx);
+
+                // Create projectile aimed at target
+                string projType = comp.ComponentType == ComponentType.WEAPON_LASER ? "laser" : "cannon";
+                int damage = projType == "laser" ? 10 : 25;
+                float speed = projType == "laser" ? 500f : 350f;
+
+                var projectile = new Projectile(spawnX, spawnY, targetAngle, speed, damage, projType, ShipId);
                 projectiles.Add(projectile);
             }
         }
