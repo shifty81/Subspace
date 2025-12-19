@@ -8,12 +8,28 @@
 - **W** or **↑** - Apply thrust (move forward)
 - **A** or **←** - Rotate left
 - **D** or **→** - Rotate right
-- **S** or **↓** - (No backwards thrust - this is space!)
+- **S** or **↓** - Apply reverse thrust (70% power)
 
 #### Combat
 - **SPACE** - Fire all weapons
   - Lasers: Fast firing, lower damage
   - Cannons: Slower firing, higher damage
+  - When targeting mode active: Weapons aim at mouse cursor
+
+#### Mouse Controls (Cosmoteer-Style)
+- **Mouse Wheel** - Zoom in/out (0.5x to 3.0x)
+- **Left Click** - Select ship (player or enemy)
+- **Right Click** - Set target point for selected ship
+- **T** - Toggle mouse targeting mode
+  - When active: Weapons fire at mouse cursor position
+  - Red crosshair reticle shows target point
+  - Works with SPACE to fire
+
+#### Camera Controls
+- **Mouse Wheel** - Zoom camera in/out
+- Camera automatically follows player ship
+- Zoom range: 0.5x (zoomed out) to 3.0x (zoomed in)
+- Default zoom: 1.5x for better visibility
 
 #### Mode Switching
 - **B** - Toggle Build Mode
@@ -30,10 +46,17 @@
 - **4** - Select Cannon Weapon
 - **5** - Select Power Reactor
 - **6** - Select Shield Generator
+- **7** - Select Crew Quarters
+- **8** - Select Ammo Factory
+- **9** - Select Corridor
+- **0** - Select Structure
 
 #### Building
 - **Left Click** - Add selected component to ship
+  - Click on ship grid at desired location
+  - Zoom in for precise placement
 - **Right Click** - Remove component from ship
+- **Mouse Wheel** - Zoom in/out for better view while building
 - **B** - Return to Play Mode
 
 ## Component Types
@@ -111,17 +134,29 @@
 
 ## HUD Information
 
-### Top Left
+### Top Left Panel (Dark background for visibility)
 - **Mode**: Current game mode (PLAY/BUILD)
-- **Health**: Current/Max ship health
-- **Power**: Available power after consumption
+- **Health**: Current/Max ship health with red bar indicator
+- **Power**: Available power after consumption with cyan bar
+- **Crew**: Working crew count
+- **Zoom**: Current camera zoom level
+- **Targeting Mode**: Shows when mouse targeting is active
+- **Selected Ship**: Shows which ship is currently selected
 
-### Bottom
+### Bottom Panel
 - **Controls**: Quick reference of available commands
+- Includes both keyboard and mouse controls
 
-### Build Mode
+### Build Mode Panel
 - **Selected Component**: Shows currently selected component type
-- **Instructions**: How to place/remove components
+- **Component Keys**: Shows keyboard shortcuts for each component
+- **Instructions**: How to place/remove components with mouse
+
+### Visual Indicators
+- **Selection Brackets**: Cyan corners around selected player ship, yellow for enemies
+- **Targeting Reticle**: Red crosshair with pulsing circle when in targeting mode
+- **Health Bars**: Color-coded (red for health, cyan for power)
+- **Semi-transparent Backgrounds**: All UI panels have dark backgrounds for readability
 
 ## Debug Commands
 
@@ -159,11 +194,11 @@ Not yet implemented. Single-player only.
 ## Future Controls (Planned)
 
 Features that may be added:
-- **Mouse aiming**: Direct weapon targeting
 - **Formation commands**: Control friendly ships
-- **Tactical pause**: Pause and issue commands
+- **Tactical pause**: Pause and issue commands with mouse
 - **Quick save**: Save your ship design
-- **Camera zoom**: Zoom in/out for better view
+- **Box selection**: Drag to select multiple ships
+- **Waypoint commands**: Right-click drag for movement paths
 
 ## Troubleshooting
 
@@ -181,6 +216,13 @@ Features that may be added:
 - Check power: Power Available ≥ Power Used
 - Make sure you have engines
 - Engines need power to work
+- Try reverse thrust with S if stuck
+
+### Mouse Not Working
+- Make sure you're in the correct mode (Play/Build)
+- Click on ships directly, not empty space
+- Try zooming in for better targeting
+- Check if targeting mode is active (press T)
 
 ### Weapons Won't Fire
 - Need power for weapons
