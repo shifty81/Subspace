@@ -237,7 +237,7 @@ public class Ship
                     float engineX = X + rotatedX;
                     float engineY = Y + rotatedY;
                     
-                    particles.CreateEngineTrust(engineX, engineY, Angle, TotalThrust / 1000f);
+                    particles.CreateEngineThrust(engineX, engineY, Angle, TotalThrust / 1000f);
                 }
             }
         }

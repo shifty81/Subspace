@@ -269,7 +269,7 @@ public class ParticleSystem
         }
     }
 
-    public void CreateEngineTrust(float x, float y, float angle, float power = 1.0f)
+    public void CreateEngineThrust(float x, float y, float angle, float power = 1.0f)
     {
         // Create 2-3 particles per frame when engine is active
         int numParticles = 2 + random.Next(2);
