@@ -135,8 +135,27 @@ public class Component
             Cooldown = 1.5f;  // Slower but more powerful
     }
 
-    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, int x, int y, int gridSize)
+    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, int x, int y, int gridSize, Dictionary<string, Texture2D>? componentTextures = null)
     {
+        // Try to use texture if available
+        if (componentTextures != null && componentTextures.TryGetValue(ComponentType, out Texture2D? texture))
+        {
+            // Draw component texture
+            Rectangle destRect = new Rectangle(x, y, gridSize - 2, gridSize - 2);
+            
+            // Damage indicator (darken based on health)
+            float healthPercent = (float)Stats.Health / Stats.MaxHealth;
+            Color tintColor = new Color(
+                (int)(255 * (0.3f + 0.7f * healthPercent)),
+                (int)(255 * (0.3f + 0.7f * healthPercent)),
+                (int)(255 * (0.3f + 0.7f * healthPercent))
+            );
+            
+            spriteBatch.Draw(texture, destRect, tintColor);
+            return;
+        }
+        
+        // Fallback to original rendering if texture not available
         // Base color
         Color baseColor = Stats.Color;
 

@@ -339,7 +339,7 @@ public class Ship
         );
     }
 
-    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, RenderTarget2D? shipSurface, float cameraX, float cameraY, GraphicsDevice graphicsDevice)
+    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, RenderTarget2D? shipSurface, float cameraX, float cameraY, GraphicsDevice graphicsDevice, Dictionary<string, Texture2D>? componentTextures = null)
     {
         int screenX = (int)(X - cameraX);
         int screenY = (int)(Y - cameraY);
@@ -363,7 +363,7 @@ public class Ship
         {
             int compX = comp.GridX * Config.GRID_SIZE;
             int compY = comp.GridY * Config.GRID_SIZE;
-            comp.Render(spriteBatch, pixelTexture, compX, compY, Config.GRID_SIZE);
+            comp.Render(spriteBatch, pixelTexture, compX, compY, Config.GRID_SIZE, componentTextures);
         }
         spriteBatch.End();
 
