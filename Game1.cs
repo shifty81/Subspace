@@ -70,6 +70,11 @@ public class Game1 : Game
     private Dictionary<int, float> _enemyFireTimers = new Dictionary<int, float>();
     private const float ENEMY_FIRE_INTERVAL = 2.4f;   // seconds between enemy fire attempts
 
+    // Directional damage indicators (screen-edge flash when player is hit)
+    private record struct DamageIndicator(float Angle, float Timer);
+    private List<DamageIndicator> _damageIndicators = new();
+    private const float DAMAGE_INDICATOR_DURATION = 0.7f;
+
     // Minimap
     private const int MINIMAP_SIZE = 150;
     private const float MINIMAP_WORLD_RADIUS = 1200f;
@@ -130,6 +135,7 @@ public class Game1 : Game
         _selectedShip = null;
         _projectiles.Clear();
         _enemyFireTimers.Clear();
+        _damageIndicators.Clear();
 
         // Create player ship
         _player = new Ship(Config.SCREEN_WIDTH / 2f, Config.SCREEN_HEIGHT / 2f, 0, true);
@@ -181,7 +187,8 @@ public class Game1 : Game
             float x  = cx + MathF.Cos(angle) * dist;
             float y  = cy + MathF.Sin(angle) * dist;
 
-            var enemy = new Ship(x, y, nextId++, false);
+            EnemyType type = PickEnemyType(_wave);
+            var enemy = new Ship(x, y, nextId++, false, type);
 
             if (_enemyShipSprites.Count > 0)
                 enemy.PrerenderedTexture = _enemyShipSprites[_random.Next(_enemyShipSprites.Count)];
@@ -189,6 +196,27 @@ public class Game1 : Game
             _enemies.Add(enemy);
         }
     }
+
+    /// <summary>
+    /// Wave-scaled enemy type selection.
+    /// Early waves are mostly Scouts; later waves introduce more Gunships and Support ships.
+    /// </summary>
+    private EnemyType PickEnemyType(int wave)
+    {
+        int roll = _random.Next(100);
+        if (wave <= 2)
+            return roll < 80 ? EnemyType.Scout : EnemyType.Gunship;
+        if (wave <= 4)
+            return roll < 50 ? EnemyType.Scout : (roll < 80 ? EnemyType.Gunship : EnemyType.Support);
+        return roll < 25 ? EnemyType.Scout : (roll < 60 ? EnemyType.Gunship : EnemyType.Support);
+    }
+
+    private static string EnemyTypeName(EnemyType t) => t switch
+    {
+        EnemyType.Gunship => "GUNSHIP",
+        EnemyType.Support => "SUPPORT",
+        _                 => "SCOUT"
+    };
 
     protected override void LoadContent()
     {
@@ -455,6 +483,16 @@ public class Game1 : Game
             return;
         }
 
+        // ── Damage indicator timers ─────────────────────────────────────────
+        for (int i = _damageIndicators.Count - 1; i >= 0; i--)
+        {
+            float newTimer = _damageIndicators[i].Timer - dt;
+            if (newTimer <= 0f)
+                _damageIndicators.RemoveAt(i);
+            else
+                _damageIndicators[i] = _damageIndicators[i] with { Timer = newTimer };
+        }
+
         // ── Wave clear ──────────────────────────────────────────────────────
         if (_waveClearPending)
         {
@@ -677,6 +715,9 @@ public class Game1 : Game
                         _particles?.CreateShieldImpact(proj.X, proj.Y);
                     else
                         _particles?.CreateDamageSparks(proj.X, proj.Y);
+                    // Record directional hit indicator
+                    float hitAngle = MathF.Atan2(proj.Y - _player.Y, proj.X - _player.X);
+                    _damageIndicators.Add(new DamageIndicator(hitAngle, DAMAGE_INDICATOR_DURATION));
                     proj.Alive = false;
                 }
             }
@@ -732,7 +773,7 @@ public class Game1 : Game
         // Draw player
         if (_player != null)
         {
-            _player.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, GraphicsDevice, _cameraZoom, _componentTextures);
+            _player.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, GraphicsDevice, _cameraZoom, _gameTime, _componentTextures);
             
             // Draw selection indicator if selected
             if (_selectedShip == _player)
@@ -742,7 +783,7 @@ public class Game1 : Game
         // Draw enemies
         foreach (var enemy in _enemies)
         {
-            enemy.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, GraphicsDevice, _cameraZoom, _componentTextures);
+            enemy.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, GraphicsDevice, _cameraZoom, _gameTime, _componentTextures);
             
             // Draw selection indicator if selected
             if (_selectedShip == enemy)
@@ -845,16 +886,25 @@ public class Game1 : Game
 
         if (_selectedShip != null)
         {
-            string sname = _selectedShip.IsPlayer ? "Your Ship" : $"Enemy #{_selectedShip.ShipId}";
+            string sname = _selectedShip.IsPlayer
+                ? "Your Ship"
+                : $"{EnemyTypeName(_selectedShip.EnemyType)} #{_selectedShip.ShipId}";
             _pixelFont.DrawString(_spriteBatch,
                 $"SEL: {sname}  HP:{_selectedShip.TotalHealth}/{_selectedShip.MaxHealth}",
                 tx, ty, Color.Yellow, S);
         }
 
+        // ── Weapon status panel (below main panel) ──────────────────────────
+        if (_mode == Config.MODE_PLAY)
+            DrawWeaponStatusPanel(panelH);
+
+        // ── Directional damage indicators ───────────────────────────────────
+        DrawDamageIndicators();
+
         // ── Top-right: combat target label ─────────────────────────────────
         if (_playerCombatTarget != null)
         {
-            string tgt = $"TARGET Enemy #{_playerCombatTarget.ShipId}";
+            string tgt = $"TARGET {EnemyTypeName(_playerCombatTarget.EnemyType)} #{_playerCombatTarget.ShipId}";
             int tw = _pixelFont.MeasureWidth(tgt, S);
             int rx = Config.SCREEN_WIDTH - tw - UI_PAD * 3;
             _spriteBatch.Draw(_pixelTexture, new Rectangle(rx - UI_PAD, UI_PAD, tw + UI_PAD * 2, lh + UI_PAD), Color.Black * 0.78f);
@@ -960,7 +1010,7 @@ public class Game1 : Game
         _spriteBatch.Draw(_pixelTexture, new Rectangle(cx - 3, cy - 1, 6, 2), Color.Lime);
         _spriteBatch.Draw(_pixelTexture, new Rectangle(cx - 1, cy - 3, 2, 6), Color.Lime);
 
-        // Enemies — red squares, clamped to map edge
+        // Enemies — color-coded by type, clamped to map edge
         foreach (var enemy in _enemies)
         {
             int dotX = cx + (int)((enemy.X - _player.X) * scale);
@@ -969,7 +1019,13 @@ public class Game1 : Game
             dotY = Math.Clamp(dotY, mapY + 3, mapY + MINIMAP_SIZE - 3);
 
             bool isCombatTarget = enemy == _playerCombatTarget;
-            Color dotColor = isCombatTarget ? Color.OrangeRed : Color.Red;
+            Color typeColor = enemy.EnemyType switch
+            {
+                EnemyType.Gunship => new Color(255, 100, 0),   // orange
+                EnemyType.Support => new Color(180, 80, 255),  // purple
+                _                 => Color.Red                 // scout
+            };
+            Color dotColor = isCombatTarget ? Color.OrangeRed : typeColor;
             _spriteBatch.Draw(_pixelTexture, new Rectangle(dotX - 2, dotY - 2, 4, 4), dotColor);
         }
 
@@ -986,9 +1042,102 @@ public class Game1 : Game
         }
     }
 
+    /// <summary>Compact weapon readiness panel drawn below the main status panel.</summary>
+    private void DrawWeaponStatusPanel(int mainPanelH)
+    {
+        if (_player == null) return;
+        var ws = _player.GetWeaponSummary();
+        if (ws.LaserCount <= 0 && ws.CannonCount <= 0) return;
+
+        const int S = 2;
+        int lh = _pixelFont.LineHeight(S);
+
+        int rows  = (ws.LaserCount  > 0 ? 1 : 0) + (ws.CannonCount > 0 ? 1 : 0) + 1; // +1 for header
+        int panelH = rows * (lh + 2) + UI_PAD * 2;
+        int panelW = 200;
+        int panelY = UI_PAD + mainPanelH + UI_PAD;
+
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(UI_PAD, panelY, panelW, panelH), Color.Black * 0.78f);
+        DrawRectangleBorder(UI_PAD, panelY, panelW, panelH, Color.Gray * 0.5f);
+
+        int tx = UI_PAD + UI_PAD;
+        int ty = panelY + UI_PAD;
+        int labelW = _pixelFont.MeasureWidth("WEAP ", S);
+        int barW   = panelW - labelW - UI_PAD * 2 - 4;
+
+        _pixelFont.DrawString(_spriteBatch, "WEAPONS", tx, ty, Color.LightGray, S);
+        ty += lh + 2;
+
+        if (ws.LaserCount > 0)
+        {
+            _pixelFont.DrawString(_spriteBatch, "LAS", tx, ty, Color.Red, S);
+            bool ready = ws.LaserReady >= 0.99f;
+            DrawBar(tx + labelW, ty, barW, lh - 2, ws.LaserReady,
+                    ready ? Color.Red : new Color(160, 50, 50),
+                    new Color(50, 0, 0));
+            string label = ready ? $"READY x{ws.LaserCount}" : "...";
+            _pixelFont.DrawString(_spriteBatch, label, tx + labelW + 2, ty, Color.White, S);
+            ty += lh + 2;
+        }
+
+        if (ws.CannonCount > 0)
+        {
+            _pixelFont.DrawString(_spriteBatch, "CAN", tx, ty, Color.Orange, S);
+            bool ready = ws.CannonReady >= 0.99f;
+            DrawBar(tx + labelW, ty, barW, lh - 2, ws.CannonReady,
+                    ready ? Color.Orange : new Color(140, 70, 20),
+                    new Color(50, 20, 0));
+            string label = ready ? $"READY x{ws.CannonCount}" : "...";
+            _pixelFont.DrawString(_spriteBatch, label, tx + labelW + 2, ty, Color.White, S);
+        }
+    }
+
+    /// <summary>
+    /// Draws a red bar at the screen edge facing the direction the player was last hit from.
+    /// Quadratic alpha fade matches the DAMAGE_INDICATOR_DURATION timer.
+    /// </summary>
+    private void DrawDamageIndicators()
+    {
+        const int EDGE_BAR_LONG   = 90;   // px length of the bar along the edge
+        const int EDGE_BAR_THICK  = 12;   // px depth into the screen
+        const int EDGE_MARGIN     = 2;    // px gap from screen edge
+
+        int W = Config.SCREEN_WIDTH;
+        int H = Config.SCREEN_HEIGHT;
+
+        foreach (var ind in _damageIndicators)
+        {
+            float t = ind.Timer / DAMAGE_INDICATOR_DURATION;
+            float alpha = t * t * 0.95f;   // quadratic fade
+            Color c = Color.Red * alpha;
+
+            float cos = MathF.Cos(ind.Angle);
+            float sin = MathF.Sin(ind.Angle);
+            float absCos = MathF.Abs(cos);
+            float absSin = MathF.Abs(sin);
+
+            if (absCos > absSin)
+            {
+                // Left or right screen edge
+                int ex = cos > 0 ? W - EDGE_BAR_THICK - EDGE_MARGIN : EDGE_MARGIN;
+                // Position along the edge, proportional to the vertical component of hit angle
+                int eyCenter = H / 2 + (int)(sin / absCos * (H * 0.3f));
+                int ey = Math.Clamp(eyCenter - EDGE_BAR_LONG / 2, EDGE_MARGIN, H - EDGE_BAR_LONG - EDGE_MARGIN);
+                _spriteBatch.Draw(_pixelTexture, new Rectangle(ex, ey, EDGE_BAR_THICK, EDGE_BAR_LONG), c);
+            }
+            else
+            {
+                // Top or bottom screen edge
+                int ey = sin > 0 ? H - EDGE_BAR_THICK - EDGE_MARGIN : EDGE_MARGIN;
+                int exCenter = W / 2 + (int)(cos / absSin * (W * 0.3f));
+                int ex = Math.Clamp(exCenter - EDGE_BAR_LONG / 2, EDGE_MARGIN, W - EDGE_BAR_LONG - EDGE_MARGIN);
+                _spriteBatch.Draw(_pixelTexture, new Rectangle(ex, ey, EDGE_BAR_LONG, EDGE_BAR_THICK), c);
+            }
+        }
+    }
+
     private void DrawGameOverOverlay()
     {
-
         // Dim the whole screen
         _spriteBatch.Draw(_pixelTexture,
             new Rectangle(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT),
@@ -1042,7 +1191,7 @@ public class Game1 : Game
         _pixelFont.DrawString(_spriteBatch, t1, px + (W - tw1) / 2, py + UI_PAD, Color.Yellow * fade, S);
 
         const int S2 = 2;
-        string t2 = $"+{500 * _wave} BONUS  NEXT: WAVE {_wave + 1}  ({2 + _wave + 1} enemies)";
+        string t2 = $"+{500 * _wave} BONUS  NEXT: WAVE {_wave + 1}  ({_wave + 3} enemies)";
         int tw2 = _pixelFont.MeasureWidth(t2, S2);
         _pixelFont.DrawString(_spriteBatch, t2, px + (W - tw2) / 2, py + UI_PAD + lh + 4, Color.Cyan * fade, S2);
     }

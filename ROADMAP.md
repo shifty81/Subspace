@@ -40,21 +40,21 @@ Goal: Make the game visually appealing with professional graphics
 #### 1.3 Ship Graphics
 - [x] Enemy ship pre-rendered sprites (26 PNG variants, randomly assigned)
 - [ ] Improved component sprites with more detail
-- [ ] Component damage visual states (intact → damaged → destroyed)
+- [x] Component damage visual states (intact → damaged → destroyed)
 - [ ] Ship hull textures and materials
-- [ ] Glow effects for powered systems
-- [ ] Weapon charge-up animations
+- [x] Glow effects for powered systems
+- [x] Weapon charge-up animations
 
 ### Phase 2: User Interface & HUD 📊
 
 Goal: Create a professional, informative interface
 
 #### 2.1 Combat HUD
-- [ ] Health/shield status bars
-- [ ] Power generation/consumption display
-- [ ] Weapon status and cooldowns
-- [ ] Target lock indicator
-- [ ] Damage indicators (directional)
+- [x] Health/shield status bars
+- [x] Power generation/consumption display
+- [x] Weapon status and cooldowns
+- [ ] Target lock indicator (enhanced)
+- [x] Damage indicators (directional screen-edge flash)
 
 #### 2.2 Ship Management UI
 - [ ] Fleet/ship selection bar at bottom
@@ -107,7 +107,7 @@ Goal: Add features that increase replayability
 
 #### 4.2 AI Improvements
 - [x] Advanced enemy tactics and formations (strafing/orbiting, flee at low health)
-- [ ] Different enemy ship types and behaviors
+- [x] Different enemy ship types and behaviors (Scout, Gunship, Support; wave-scaled spawning)
 - [ ] Friendly AI wingmen
 - [ ] Dynamic difficulty adjustment
 

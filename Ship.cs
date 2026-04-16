@@ -6,6 +6,12 @@ using System.Linq;
 
 namespace Subspace;
 
+/// <summary>Enemy archetype that determines starting layout and stats.</summary>
+public enum EnemyType { Scout, Gunship, Support }
+
+/// <summary>Per-weapon-type readiness summary for the HUD. Ready = 1.0, just fired = 0.0. Count = -1 means no weapons of that type.</summary>
+public record struct WeaponSummary(int LaserCount, float LaserReady, int CannonCount, float CannonReady);
+
 /// <summary>
 /// A spaceship made of modular components
 /// </summary>
@@ -35,6 +41,9 @@ public class Ship
     public Ship? Target { get; set; }
     public string AIState { get; set; } = "idle";
 
+    // Enemy type (only meaningful for non-player ships)
+    public EnemyType EnemyType { get; private set; }
+
     // Optional pre-rendered sprite for enemies (overrides component-based rendering)
     public Texture2D? PrerenderedTexture { get; set; }
 
@@ -53,12 +62,13 @@ public class Ship
     private float _strafeTimer = 0f;
     private const float STRAFE_SWITCH_INTERVAL = 2.5f;
 
-    public Ship(float x, float y, int shipId, bool isPlayer = false)
+    public Ship(float x, float y, int shipId, bool isPlayer = false, EnemyType enemyType = EnemyType.Scout)
     {
         X = x;
         Y = y;
         ShipId = shipId;
         IsPlayer = isPlayer;
+        EnemyType = enemyType;
         Angle = 0f;
         VX = 0f;
         VY = 0f;
@@ -68,7 +78,7 @@ public class Ship
         if (isPlayer)
             CreatePlayerShip();
         else
-            CreateEnemyShip();
+            CreateEnemyShip(enemyType);
 
         RecalculateStats();
         
@@ -103,14 +113,54 @@ public class Ship
         Components.Add(new Component(ComponentType.ARMOR, 4, 5));
     }
 
-    private void CreateEnemyShip()
+    private void CreateEnemyShip(EnemyType type = EnemyType.Scout)
     {
-        // Smaller, simpler enemy ship
+        switch (type)
+        {
+            case EnemyType.Gunship: CreateGunship(); break;
+            case EnemyType.Support: CreateSupport(); break;
+            default:                CreateScout();   break;
+        }
+    }
+
+    /// <summary>Fast, lightly-armed interceptor — 3 engines, single laser.</summary>
+    private void CreateScout()
+    {
+        Components.Add(new Component(ComponentType.CORE, 4, 4));
+        Components.Add(new Component(ComponentType.ENGINE, 3, 6));
+        Components.Add(new Component(ComponentType.ENGINE, 5, 6));
+        Components.Add(new Component(ComponentType.ENGINE, 4, 7));
+        Components.Add(new Component(ComponentType.WEAPON_LASER, 4, 3));
+        Components.Add(new Component(ComponentType.POWER, 4, 5));
+    }
+
+    /// <summary>Heavily armoured with dual cannons — slow but lethal.</summary>
+    private void CreateGunship()
+    {
+        Components.Add(new Component(ComponentType.CORE, 4, 4));
+        Components.Add(new Component(ComponentType.ENGINE, 4, 7));
+        Components.Add(new Component(ComponentType.WEAPON_CANNON, 3, 2));
+        Components.Add(new Component(ComponentType.WEAPON_CANNON, 5, 2));
+        Components.Add(new Component(ComponentType.WEAPON_LASER, 4, 3));
+        Components.Add(new Component(ComponentType.POWER, 3, 5));
+        Components.Add(new Component(ComponentType.POWER, 5, 5));
+        Components.Add(new Component(ComponentType.ARMOR, 3, 3));
+        Components.Add(new Component(ComponentType.ARMOR, 5, 3));
+        Components.Add(new Component(ComponentType.ARMOR, 3, 4));
+        Components.Add(new Component(ComponentType.ARMOR, 5, 4));
+    }
+
+    /// <summary>Shield-heavy support vessel — resilient but offensively modest.</summary>
+    private void CreateSupport()
+    {
         Components.Add(new Component(ComponentType.CORE, 4, 4));
         Components.Add(new Component(ComponentType.ENGINE, 4, 6));
         Components.Add(new Component(ComponentType.WEAPON_LASER, 4, 3));
         Components.Add(new Component(ComponentType.POWER, 3, 4));
-        Components.Add(new Component(ComponentType.ARMOR, 5, 4));
+        Components.Add(new Component(ComponentType.POWER, 5, 4));
+        Components.Add(new Component(ComponentType.SHIELD, 3, 3));
+        Components.Add(new Component(ComponentType.SHIELD, 5, 3));
+        Components.Add(new Component(ComponentType.SHIELD, 4, 5));
     }
 
     private void RecalculateStats()
@@ -129,6 +179,25 @@ public class Ship
             PowerUsed += comp.Stats.PowerConsumption;
             TotalThrust += comp.Stats.Thrust;
         }
+    }
+
+    /// <summary>
+    /// Returns weapon readiness for the HUD.
+    /// Ready value of 1.0 = fully charged, 0.0 = just fired.
+    /// Count of -1 means no weapons of that type are alive.
+    /// </summary>
+    public WeaponSummary GetWeaponSummary()
+    {
+        const float LASER_MAX_CD  = 0.5f;
+        const float CANNON_MAX_CD = 1.5f;
+
+        var lasers  = Components.Where(c => c.ComponentType == ComponentType.WEAPON_LASER  && c.Stats.Health > 0).ToList();
+        var cannons = Components.Where(c => c.ComponentType == ComponentType.WEAPON_CANNON && c.Stats.Health > 0).ToList();
+
+        float laserReady  = lasers.Count  > 0 ? (float)lasers.Average(c  => Math.Clamp(1f - c.Cooldown / LASER_MAX_CD,  0f, 1f)) : -1f;
+        float cannonReady = cannons.Count > 0 ? (float)cannons.Average(c => Math.Clamp(1f - c.Cooldown / CANNON_MAX_CD, 0f, 1f)) : -1f;
+
+        return new WeaponSummary(lasers.Count, laserReady, cannons.Count, cannonReady);
     }
 
     public void AddComponent(Component component)
@@ -512,7 +581,7 @@ public class Ship
         );
     }
 
-    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, float cameraX, float cameraY, GraphicsDevice graphicsDevice, float zoom, Dictionary<string, Texture2D>? componentTextures = null)
+    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, float cameraX, float cameraY, GraphicsDevice graphicsDevice, float zoom, float gameTime, Dictionary<string, Texture2D>? componentTextures = null)
     {
         int screenX = (int)(X - cameraX);
         int screenY = (int)(Y - cameraY);
@@ -558,7 +627,7 @@ public class Ship
         {
             int compX = comp.GridX * Config.GRID_SIZE;
             int compY = comp.GridY * Config.GRID_SIZE;
-            comp.Render(spriteBatch, pixelTexture, compX, compY, Config.GRID_SIZE, componentTextures);
+            comp.Render(spriteBatch, pixelTexture, compX, compY, Config.GRID_SIZE, gameTime, componentTextures);
         }
         spriteBatch.End();
 
