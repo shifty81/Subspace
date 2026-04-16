@@ -932,6 +932,13 @@ public class Game1 : Game
 
     protected override void Draw(GameTime gameTime)
     {
+        // Pre-render every ship's component surface onto its cached RenderTarget2D
+        // BEFORE touching the backbuffer.  This keeps all render-target switches
+        // out of the main draw pass so the backbuffer is never discarded mid-frame.
+        _player?.PreRender(_spriteBatch, _pixelTexture, GraphicsDevice, _gameTime, _componentTextures);
+        foreach (var enemy in _enemies)
+            enemy.PreRender(_spriteBatch, _pixelTexture, GraphicsDevice, _gameTime, _componentTextures);
+
         GraphicsDevice.Clear(Color.Black);
 
         // Create a transformation matrix for the zoom

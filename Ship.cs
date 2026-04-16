@@ -603,12 +603,54 @@ public class Ship
         );
     }
 
+    /// <summary>
+    /// Pre-renders the ship's components onto <see cref="_shipSurface"/> using a temporary
+    /// render target.  Must be called for every ship <b>before</b> the main draw pass begins
+    /// so that the render-target switch never clears the backbuffer mid-frame.
+    /// </summary>
+    public void PreRender(SpriteBatch spriteBatch, Texture2D pixelTexture, GraphicsDevice graphicsDevice, float gameTime, Dictionary<string, Texture2D>? componentTextures = null)
+    {
+        // Ships that use a pre-assigned sprite don't need a render target.
+        if (PrerenderedTexture != null) return;
+
+        int shipWidth  = GridWidth  * Config.GRID_SIZE;
+        int shipHeight = GridHeight * Config.GRID_SIZE;
+
+        // Reuse or recreate the cached render target when size changes.
+        if (_shipSurface == null || _shipSurface.IsDisposed ||
+            _shipSurface.Width != shipWidth || _shipSurface.Height != shipHeight)
+        {
+            _shipSurface?.Dispose();
+            _shipSurface = new RenderTarget2D(graphicsDevice, shipWidth, shipHeight);
+        }
+
+        graphicsDevice.SetRenderTarget(_shipSurface);
+        graphicsDevice.Clear(Color.Transparent);
+
+        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
+        foreach (var comp in Components)
+        {
+            int compX = comp.GridX * Config.GRID_SIZE;
+            int compY = comp.GridY * Config.GRID_SIZE;
+            comp.Render(spriteBatch, pixelTexture, compX, compY, Config.GRID_SIZE, gameTime, componentTextures);
+        }
+        spriteBatch.End();
+
+        // Restore the backbuffer so the caller can proceed with normal drawing.
+        graphicsDevice.SetRenderTarget(null);
+    }
+
+    /// <summary>
+    /// Draws the ship onto the currently active <paramref name="spriteBatch"/>.
+    /// <see cref="PreRender"/> must have been called this frame before the main
+    /// draw pass starts — this method no longer switches render targets.
+    /// </summary>
     public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, float cameraX, float cameraY, GraphicsDevice graphicsDevice, float zoom, float gameTime, Dictionary<string, Texture2D>? componentTextures = null)
     {
         int screenX = (int)(X - cameraX);
         int screenY = (int)(Y - cameraY);
 
-        // If a pre-rendered sprite is assigned (e.g. for enemy ships), draw it directly
+        // If a pre-rendered sprite is assigned (e.g. for enemy ships), draw it directly.
         if (PrerenderedTexture != null)
         {
             spriteBatch.Draw(
@@ -625,43 +667,13 @@ public class Ship
             return;
         }
 
-        // Create a temporary surface for the ship
-        int shipWidth = GridWidth * Config.GRID_SIZE;
-        int shipHeight = GridHeight * Config.GRID_SIZE;
+        // _shipSurface is populated by PreRender(); skip silently if not ready.
+        if (_shipSurface == null || _shipSurface.IsDisposed) return;
 
-        // Reuse or (re)create the cached render target
-        if (_shipSurface == null || _shipSurface.IsDisposed ||
-            _shipSurface.Width != shipWidth || _shipSurface.Height != shipHeight)
-        {
-            _shipSurface?.Dispose();
-            _shipSurface = new RenderTarget2D(graphicsDevice, shipWidth, shipHeight);
-        }
+        int shipWidth  = _shipSurface.Width;
+        int shipHeight = _shipSurface.Height;
 
-        // End the current spriteBatch before changing render targets
-        spriteBatch.End();
-
-        // Render components onto the ship surface
-        graphicsDevice.SetRenderTarget(_shipSurface);
-        graphicsDevice.Clear(Color.Transparent);
-
-        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
-        foreach (var comp in Components)
-        {
-            int compX = comp.GridX * Config.GRID_SIZE;
-            int compY = comp.GridY * Config.GRID_SIZE;
-            comp.Render(spriteBatch, pixelTexture, compX, compY, Config.GRID_SIZE, gameTime, componentTextures);
-        }
-        spriteBatch.End();
-
-        // Restore main render target
-        graphicsDevice.SetRenderTarget(null);
-
-        // Restart the world spriteBatch with the correct zoom transform so subsequent
-        // draws (other ships, projectiles, indicators) are all properly scaled.
-        Matrix zoomTransform = Matrix.CreateScale(zoom);
-        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, null, null, null, null, zoomTransform);
-
-        // Draw rotated ship onto the main surface
+        // Draw the rotated ship surface into the active spriteBatch.
         spriteBatch.Draw(
             _shipSurface,
             new Vector2(screenX, screenY),
@@ -674,7 +686,7 @@ public class Ship
             0
         );
 
-        // Draw crew members on top of the ship
+        // Draw crew members on top of the ship.
         CrewManager?.Render(spriteBatch, pixelTexture, cameraX, cameraY);
     }
 }
