@@ -29,7 +29,7 @@ public class Ship
     public int PowerAvailable { get; private set; }
     public int PowerUsed { get; private set; }
     public float TotalThrust { get; private set; }
-    
+
     public CrewManager? CrewManager { get; private set; }
 
     public Ship? Target { get; set; }
@@ -40,6 +40,18 @@ public class Ship
 
     // Cached render target for ship surface (reused across frames)
     private RenderTarget2D? _shipSurface;
+
+    // Shield / damage state
+    /// <summary>Set to true for one frame whenever a hit is absorbed by shields.</summary>
+    public bool LastHitWasShielded { get; private set; }
+    private float _damageCooldown = 0f;
+    private const float DAMAGE_COOLDOWN_DURATION = 2.0f;
+    private const float SHIELD_REGEN_RATE = 3f;  // HP per second per shield component
+
+    // AI strafing
+    private int _strafeDirection = 1;
+    private float _strafeTimer = 0f;
+    private const float STRAFE_SWITCH_INTERVAL = 2.5f;
 
     public Ship(float x, float y, int shipId, bool isPlayer = false)
     {
@@ -136,8 +148,11 @@ public class Ship
         return Components.FirstOrDefault(c => c.GridX == gridX && c.GridY == gridY);
     }
 
-    public void Update(float dt, Ship? target = null)
+    public void Update(float dt, Ship? target = null, ParticleSystem? particles = null)
     {
+        // Reset per-frame flags
+        LastHitWasShielded = false;
+
         // Update all components
         foreach (var comp in Components)
             comp.Update(dt);
@@ -150,6 +165,54 @@ public class Ship
         {
             Target = target;
             UpdateAI(dt);
+        }
+
+        // Shield recharge (only when not recently hit)
+        _damageCooldown -= dt;
+        if (_damageCooldown <= 0f)
+        {
+            foreach (var shield in Components)
+            {
+                if (shield.ComponentType == ComponentType.SHIELD &&
+                    shield.Stats.Health > 0 &&
+                    shield.Stats.Health < shield.Stats.MaxHealth)
+                {
+                    shield.Stats.Health = Math.Min(
+                        shield.Stats.MaxHealth,
+                        shield.Stats.Health + (int)(SHIELD_REGEN_RATE * dt));
+                }
+            }
+        }
+
+        // Damage smoke: heavily-damaged components emit occasional smoke
+        if (particles != null)
+        {
+            foreach (var comp in Components)
+            {
+                float hp = (float)comp.Stats.Health / Math.Max(1, comp.Stats.MaxHealth);
+                if (hp < 0.4f && hp > 0f)
+                {
+                    // Probability scales with damage severity (~1 puff/sec at 20% HP)
+                    float chance = (0.4f - hp) * 2f * dt;
+                    if (Random.Shared.NextSingle() < chance)
+                    {
+                        float localX = (comp.GridX - GridWidth / 2f) * Config.GRID_SIZE;
+                        float localY = (comp.GridY - GridHeight / 2f) * Config.GRID_SIZE;
+                        float cosA = MathF.Cos(Angle), sinA = MathF.Sin(Angle);
+                        float wx = X + localX * cosA - localY * sinA;
+                        float wy = Y + localX * sinA + localY * cosA;
+                        particles.CreateDamageSmoke(wx, wy);
+                    }
+                }
+            }
+        }
+
+        // AI strafe timer
+        _strafeTimer -= dt;
+        if (_strafeTimer <= 0f)
+        {
+            _strafeTimer = STRAFE_SWITCH_INTERVAL;
+            _strafeDirection = -_strafeDirection;
         }
 
         // Apply drag
@@ -182,38 +245,56 @@ public class Ship
         if (Target == null)
             return;
 
-        // Calculate direction to target
         float dx = Target.X - X;
         float dy = Target.Y - Y;
-        float distance = (float)Math.Sqrt(dx * dx + dy * dy);
+        float distance = MathF.Sqrt(dx * dx + dy * dy);
+        if (distance < 1f) return;
 
-        if (distance < 10)
-            return;
-
-        float targetAngle = (float)Math.Atan2(dy, dx);
+        float targetAngle = MathF.Atan2(dy, dx);
 
         // Rotate towards target
         float angleDiff = targetAngle - Angle;
-        // Normalize angle difference to [-pi, pi]
-        while (angleDiff > Math.PI)
-            angleDiff -= (float)(2 * Math.PI);
-        while (angleDiff < -Math.PI)
-            angleDiff += (float)(2 * Math.PI);
+        angleDiff = ((angleDiff + MathF.PI) % MathF.Tau) - MathF.PI;
 
-        // Apply rotation
-        float rotationSpeed = 2.0f;
-        if (Math.Abs(angleDiff) > 0.1f)
-            AngularVelocity = rotationSpeed * (angleDiff > 0 ? 1 : -1);
-        else
-            AngularVelocity = 0;
+        float rotationSpeed = 2.5f;
+        AngularVelocity = MathF.Abs(angleDiff) > 0.05f
+            ? rotationSpeed * (angleDiff > 0 ? 1 : -1)
+            : 0f;
 
-        // Move forward if facing target
-        if (Math.Abs(angleDiff) < 0.5f)
+        // Flee when below 25% health
+        float hpPct = MaxHealth > 0 ? (float)TotalHealth / MaxHealth : 1f;
+        if (hpPct < 0.25f)
         {
-            // Keep distance
-            float optimalDistance = 300f;
-            if (distance > optimalDistance)
+            // Flee away from target
+            if (MathF.Abs(angleDiff) < 1.0f)
                 ApplyThrust(dt);
+            return;
+        }
+
+        const float OPTIMAL_DISTANCE = 280f;
+        const float TOO_CLOSE        = 180f;
+
+        if (distance > OPTIMAL_DISTANCE + 60f)
+        {
+            // Too far — close in while roughly facing the target
+            if (MathF.Abs(angleDiff) < 0.6f)
+                ApplyThrust(dt);
+        }
+        else if (distance < TOO_CLOSE)
+        {
+            // Too close — back away
+            ApplyReverseThrust(dt);
+        }
+        else
+        {
+            // In combat range — strafe perpendicular to the target direction
+            if (MathF.Abs(angleDiff) < 0.4f)
+            {
+                float perpAngle = targetAngle + MathF.PI / 2f * _strafeDirection;
+                float thrustForce = TotalThrust * dt * 0.6f;
+                VX += MathF.Cos(perpAngle) * thrustForce;
+                VY += MathF.Sin(perpAngle) * thrustForce;
+            }
         }
     }
 
@@ -364,6 +445,9 @@ public class Ship
 
     public void TakeDamage(int damage, float hitX, float hitY)
     {
+        // Reset damage cooldown (blocks shield regen)
+        _damageCooldown = DAMAGE_COOLDOWN_DURATION;
+
         // Shield absorption: each functional shield reduces damage by 20%, capped at 70%
         int shieldCount = Components.Count(c =>
             c.ComponentType == ComponentType.SHIELD && c.Stats.Health > 0);
@@ -371,6 +455,7 @@ public class Ship
         {
             float absorption = Math.Min(0.70f, shieldCount * 0.20f);
             damage = Math.Max(1, (int)(damage * (1f - absorption)));
+            LastHitWasShielded = true;
         }
 
         // Convert world position to local grid position

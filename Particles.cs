@@ -327,6 +327,52 @@ public class ParticleSystem
         }
     }
 
+    /// <summary>Cyan ripple burst when a shield component absorbs a hit.</summary>
+    public void CreateShieldImpact(float x, float y)
+    {
+        // Central bright flash
+        particles.Add(new Particle(x, y, 0, 0, 0.12f, 8f, Color.Cyan, true, true));
+        particles.Add(new Particle(x, y, 0, 0, 0.18f, 5f, Color.White, true, true));
+
+        // Ripple ring
+        const int RING = 16;
+        for (int i = 0; i < RING; i++)
+        {
+            float angle = i * MathF.Tau / RING;
+            float speed = 80f + (float)random.NextDouble() * 60f;
+            float vx = MathF.Cos(angle) * speed;
+            float vy = MathF.Sin(angle) * speed;
+            Color color = (i % 2 == 0) ? new Color(80, 220, 255) : Color.Cyan;
+            particles.Add(new Particle(x, y, vx, vy, 0.22f, 3f, color, true, true));
+        }
+
+        // Small debris sparks (darker blue)
+        for (int i = 0; i < 10; i++)
+        {
+            float angle = (float)(random.NextDouble() * Math.PI * 2);
+            float speed = 50f + (float)random.NextDouble() * 80f;
+            particles.Add(new Particle(x, y,
+                MathF.Cos(angle) * speed, MathF.Sin(angle) * speed,
+                0.3f + (float)random.NextDouble() * 0.2f,
+                1.5f + (float)random.NextDouble() * 2f,
+                new Color(50, 150, 255), true, true));
+        }
+    }
+
+    /// <summary>Occasional smoke puff emitted by heavily-damaged components.</summary>
+    public void CreateDamageSmoke(float x, float y)
+    {
+        float vx = (float)(random.NextDouble() - 0.5) * 20f;
+        float vy = -20f - (float)random.NextDouble() * 30f;   // drifts upward
+        Color smokeColor = random.NextDouble() < 0.5
+            ? new Color(80, 80, 80)
+            : new Color(110, 110, 110);
+        particles.Add(new Particle(x, y, vx, vy,
+            0.8f + (float)random.NextDouble() * 0.6f,
+            4f  + (float)random.NextDouble() * 4f,
+            smokeColor, true, false));
+    }
+
     public void Clear()
     {
         particles.Clear();

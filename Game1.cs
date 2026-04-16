@@ -39,6 +39,7 @@ public class Game1 : Game
     private Ship? _player;
     private List<Ship> _enemies = new List<Ship>();
     private List<Projectile> _projectiles = new List<Projectile>();
+    private List<Asteroid> _asteroids = new List<Asteroid>();
 
     // Ship builder state
     private string _builderSelectedType = ComponentType.ARMOR;
@@ -64,6 +65,10 @@ public class Game1 : Game
     // Auto-fire at combat target
     private float _autoFireTimer = 0f;
     private const float AUTO_FIRE_INTERVAL = 0.35f;
+
+    // Enemy fire timers (keyed by ShipId) — frame-rate independent
+    private Dictionary<int, float> _enemyFireTimers = new Dictionary<int, float>();
+    private const float ENEMY_FIRE_INTERVAL = 2.4f;   // seconds between enemy fire attempts
 
     // Minimap
     private const int MINIMAP_SIZE = 150;
@@ -124,13 +129,36 @@ public class Game1 : Game
         _playerCombatTarget = null;
         _selectedShip = null;
         _projectiles.Clear();
+        _enemyFireTimers.Clear();
 
         // Create player ship
         _player = new Ship(Config.SCREEN_WIDTH / 2f, Config.SCREEN_HEIGHT / 2f, 0, true);
 
+        // Scatter asteroids around the arena (persistent across waves)
+        _asteroids.Clear();
+        SpawnAsteroids();
+
         // Spawn initial wave of enemies
         _enemies.Clear();
         SpawnWave();
+    }
+
+    private void SpawnAsteroids()
+    {
+        // 12–15 asteroids scattered in a ring around the player start
+        int count = 12 + _random.Next(4);
+        float cx = _player?.X ?? Config.SCREEN_WIDTH / 2f;
+        float cy = _player?.Y ?? Config.SCREEN_HEIGHT / 2f;
+
+        for (int i = 0; i < count; i++)
+        {
+            float angle  = _random.NextSingle() * MathF.Tau;
+            float dist   = 300f + _random.NextSingle() * 900f;
+            float x = cx + MathF.Cos(angle) * dist;
+            float y = cy + MathF.Sin(angle) * dist;
+            int radius = 20 + _random.Next(35);   // 20–54 px radius
+            _asteroids.Add(new Asteroid(x, y, radius, _random));
+        }
     }
 
     private void SpawnWave()
@@ -486,8 +514,7 @@ public class Game1 : Game
             {
                 float targetAngle = MathF.Atan2(dy, dx);
                 float angleDiff = targetAngle - _player.Angle;
-                while (angleDiff > MathF.PI) angleDiff -= 2 * MathF.PI;
-                while (angleDiff < -MathF.PI) angleDiff += 2 * MathF.PI;
+                angleDiff = ((angleDiff + MathF.PI) % MathF.Tau) - MathF.PI;
 
                 if (MathF.Abs(angleDiff) > AUTOPILOT_ANGLE_THRESHOLD)
                     _player.Rotate(angleDiff > 0 ? 1 : -1, dt);
@@ -525,21 +552,56 @@ public class Game1 : Game
         }
 
         // Update player
-        _player.Update(dt);
+        _player.Update(dt, null, _particles);
 
         // Update enemies
         foreach (var enemy in _enemies.ToList())
         {
-            enemy.Update(dt, _player);
+            enemy.Update(dt, _player, _particles);
 
-            // Enemy AI firing (~0.4 shots/sec per enemy)
-            if (_random.NextDouble() < 0.007)
+            // Enemy AI firing — frame-rate independent timer
+            if (!_enemyFireTimers.TryGetValue(enemy.ShipId, out float fireTimer))
+                fireTimer = ENEMY_FIRE_INTERVAL * (float)_random.NextDouble(); // stagger initial shots
+
+            fireTimer -= dt;
+            if (fireTimer <= 0f)
             {
+                fireTimer = ENEMY_FIRE_INTERVAL;
                 var projectiles = enemy.FireWeapons();
                 _projectiles.AddRange(projectiles);
                 foreach (var proj in projectiles)
                     _particles?.CreateWeaponFireEffect(proj.X, proj.Y, proj.Angle, proj.ProjectileType);
             }
+            _enemyFireTimers[enemy.ShipId] = fireTimer;
+        }
+
+        // Update asteroids + check ship-asteroid collisions
+        foreach (var ast in _asteroids)
+        {
+            ast.Update(dt);
+
+            // Gentle push + damage if a ship runs into an asteroid
+            void CheckShipAsteroid(Ship ship, int contactDamage)
+            {
+                var bounds = ship.GetBounds();
+                float shipRadius = (bounds.Width + bounds.Height) / 4f;
+                if (ast.OverlapCircle(ship.X, ship.Y, shipRadius))
+                {
+                    // Push ship away
+                    float nx = ship.X - ast.X;
+                    float ny = ship.Y - ast.Y;
+                    float len = MathF.Sqrt(nx * nx + ny * ny);
+                    if (len > 0.01f) { nx /= len; ny /= len; }
+                    ship.VX += nx * 120f;
+                    ship.VY += ny * 120f;
+                    ship.TakeDamage(contactDamage, ast.X, ast.Y);
+                    _particles?.CreateDamageSparks(ship.X, ship.Y);
+                }
+            }
+
+            CheckShipAsteroid(_player, 2);
+            foreach (var enemy in _enemies)
+                CheckShipAsteroid(enemy, 2);
         }
 
         // Update projectiles
@@ -560,6 +622,7 @@ public class Game1 : Game
             {
                 _particles?.CreateExplosion(enemy.X, enemy.Y, "large");
                 _enemies.Remove(enemy);
+                _enemyFireTimers.Remove(enemy.ShipId);
                 if (_playerCombatTarget == enemy) _playerCombatTarget = null;
                 if (_selectedShip == enemy) _selectedShip = null;
                 _kills++;
@@ -588,6 +651,21 @@ public class Game1 : Game
             if (!proj.Alive)
                 continue;
 
+            // Check collision with asteroids first
+            foreach (var ast in _asteroids)
+            {
+                if (ast.ContainsPoint(proj.X, proj.Y))
+                {
+                    bool destroyed = ast.TakeDamage(proj.Damage * 2);
+                    _particles?.CreateDamageSparks(proj.X, proj.Y);
+                    if (destroyed)
+                        _particles?.CreateExplosion(ast.X, ast.Y, "medium");
+                    proj.Alive = false;
+                    break;
+                }
+            }
+            if (!proj.Alive) continue;
+
             // Check collision with player
             if (proj.OwnerId != _player.ShipId)
             {
@@ -595,10 +673,15 @@ public class Game1 : Game
                 if (proj.CheckCollision(playerBounds))
                 {
                     _player.TakeDamage(proj.Damage, proj.X, proj.Y);
-                    _particles?.CreateDamageSparks(proj.X, proj.Y);
+                    if (_player.LastHitWasShielded)
+                        _particles?.CreateShieldImpact(proj.X, proj.Y);
+                    else
+                        _particles?.CreateDamageSparks(proj.X, proj.Y);
                     proj.Alive = false;
                 }
             }
+
+            if (!proj.Alive) continue;
 
             // Check collision with enemies
             foreach (var enemy in _enemies)
@@ -609,13 +692,19 @@ public class Game1 : Game
                     if (proj.CheckCollision(enemyBounds))
                     {
                         enemy.TakeDamage(proj.Damage, proj.X, proj.Y);
-                        _particles?.CreateDamageSparks(proj.X, proj.Y);
+                        if (enemy.LastHitWasShielded)
+                            _particles?.CreateShieldImpact(proj.X, proj.Y);
+                        else
+                            _particles?.CreateDamageSparks(proj.X, proj.Y);
                         proj.Alive = false;
                         break;
                     }
                 }
             }
         }
+
+        // Remove destroyed asteroids
+        _asteroids.RemoveAll(a => a.IsDestroyed());
     }
 
     protected override void Draw(GameTime gameTime)
@@ -635,6 +724,10 @@ public class Game1 : Game
 
         // Draw particles (background layer)
         _particles?.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT);
+
+        // Draw asteroids (behind ships)
+        foreach (var ast in _asteroids)
+            ast.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY);
 
         // Draw player
         if (_player != null)
@@ -878,6 +971,18 @@ public class Game1 : Game
             bool isCombatTarget = enemy == _playerCombatTarget;
             Color dotColor = isCombatTarget ? Color.OrangeRed : Color.Red;
             _spriteBatch.Draw(_pixelTexture, new Rectangle(dotX - 2, dotY - 2, 4, 4), dotColor);
+        }
+
+        // Asteroids — grey dots
+        foreach (var ast in _asteroids)
+        {
+            int dotX = cx + (int)((ast.X - _player.X) * scale);
+            int dotY = cy + (int)((ast.Y - _player.Y) * scale);
+            if (dotX >= mapX + 1 && dotX <= mapX + MINIMAP_SIZE - 1 &&
+                dotY >= mapY + 1 && dotY <= mapY + MINIMAP_SIZE - 1)
+            {
+                _spriteBatch.Draw(_pixelTexture, new Rectangle(dotX - 1, dotY - 1, 3, 3), new Color(120, 110, 100));
+            }
         }
     }
 

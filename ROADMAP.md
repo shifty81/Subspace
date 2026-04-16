@@ -27,14 +27,15 @@ Goal: Make the game visually appealing with professional graphics
 - [x] Nebula and space dust effects
 - [x] Nebula texture integration (real PNG assets with parallax)
 - [ ] Dynamic lighting and ambient effects
-- [ ] Asteroid fields and space debris
+- [x] Asteroid fields and space debris
 
 #### 1.2 Particle Systems
 - [x] Weapon fire particle effects (lasers, projectiles)
 - [x] Explosion animations with debris
 - [x] Engine thrust particles
-- [ ] Shield impact effects
+- [x] Shield impact effects
 - [x] Damage sparks and fire effects
+- [x] Damage-state smoke (heavily damaged components emit smoke)
 
 #### 1.3 Ship Graphics
 - [x] Enemy ship pre-rendered sprites (26 PNG variants, randomly assigned)
@@ -74,7 +75,7 @@ Goal: Add depth and variety to gameplay
 
 #### 3.1 Extended Combat
 - [ ] Additional weapon types (missiles, torpedoes, point defense)
-- [ ] Shield systems with recharge mechanics
+- [x] Shield systems with recharge mechanics
 - [ ] Critical hits and component-specific damage
 - [ ] Weapon targeting priorities
 - [ ] Formation combat for multiple ships
@@ -105,7 +106,7 @@ Goal: Add features that increase replayability
 - [ ] Boss battles
 
 #### 4.2 AI Improvements
-- [ ] Advanced enemy tactics and formations
+- [x] Advanced enemy tactics and formations (strafing/orbiting, flee at low health)
 - [ ] Different enemy ship types and behaviors
 - [ ] Friendly AI wingmen
 - [ ] Dynamic difficulty adjustment
