@@ -40,6 +40,7 @@ public static class ComponentType
     public const string ENGINE = "engine";
     public const string WEAPON_LASER = "weapon_laser";
     public const string WEAPON_CANNON = "weapon_cannon";
+    public const string WEAPON_MISSILE = "weapon_missile";
     public const string ARMOR = "armor";
     public const string POWER = "power";
     public const string SHIELD = "shield";
@@ -84,6 +85,8 @@ public class Component
                 "Laser", 40, 40, 15, 0, 0f, new Color(255, 0, 0)),
             Subspace.ComponentType.WEAPON_CANNON => new ComponentStats(
                 "Cannon", 60, 60, 20, 0, 0f, new Color(150, 150, 0)),
+            Subspace.ComponentType.WEAPON_MISSILE => new ComponentStats(
+                "Missile Bay", 55, 55, 30, 0, 0f, new Color(0, 180, 200)),
             Subspace.ComponentType.ARMOR => new ComponentStats(
                 "Armor", 150, 150, 0, 0, 0f, new Color(150, 150, 150)),
             Subspace.ComponentType.POWER => new ComponentStats(
@@ -124,7 +127,8 @@ public class Component
     public bool CanFire()
     {
         return (ComponentType == Subspace.ComponentType.WEAPON_LASER || 
-                ComponentType == Subspace.ComponentType.WEAPON_CANNON) &&
+                ComponentType == Subspace.ComponentType.WEAPON_CANNON ||
+                ComponentType == Subspace.ComponentType.WEAPON_MISSILE) &&
                Cooldown <= 0 && Stats.Health > 0;
     }
 
@@ -134,6 +138,8 @@ public class Component
             Cooldown = 0.5f;  // 2 shots per second
         else if (ComponentType == Subspace.ComponentType.WEAPON_CANNON)
             Cooldown = 1.5f;  // Slower but more powerful
+        else if (ComponentType == Subspace.ComponentType.WEAPON_MISSILE)
+            Cooldown = 3.0f;  // Slow reload, powerful homing
     }
 
     private float GetHealthPercent()
@@ -246,6 +252,16 @@ public class Component
             DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 5, Color.Orange);
             DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 2, centerY - 14, 4, 12), Color.Orange * 0.6f, 1);
             DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 1, centerY - 13, 2, 11), Color.Yellow, 1);
+        }
+        else if (ComponentType == Subspace.ComponentType.WEAPON_MISSILE)
+        {
+            // Missile bay — cyan with an arrow symbol
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 8, new Color(0, 180, 200) * 0.4f);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 5, new Color(0, 200, 230));
+            // Missile silhouette (two angled lines + tip)
+            DrawLine(spriteBatch, pixelTexture, centerX - 4, centerY + 5, centerX, centerY - 8, 2, Color.White);
+            DrawLine(spriteBatch, pixelTexture, centerX + 4, centerY + 5, centerX, centerY - 8, 2, Color.White);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY - 8, 2, new Color(0, 255, 255));
         }
         else if (ComponentType == Subspace.ComponentType.POWER)
         {
@@ -361,6 +377,13 @@ public class Component
                 float chargeT = 1f - Math.Clamp(Cooldown / 1.5f, 0f, 1f);
                 glowColor = Color.Orange;
                 baseAlpha = 0.10f + chargeT * 0.45f;
+                break;
+            }
+            case Subspace.ComponentType.WEAPON_MISSILE:
+            {
+                float chargeT = 1f - Math.Clamp(Cooldown / 3.0f, 0f, 1f);
+                glowColor = new Color(0, 200, 255);
+                baseAlpha = 0.08f + chargeT * 0.50f;
                 break;
             }
         }

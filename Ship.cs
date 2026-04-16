@@ -10,7 +10,7 @@ namespace Subspace;
 public enum EnemyType { Scout, Gunship, Support }
 
 /// <summary>Per-weapon-type readiness summary for the HUD. Ready = 1.0, just fired = 0.0. Count = -1 means no weapons of that type.</summary>
-public record struct WeaponSummary(int LaserCount, float LaserReady, int CannonCount, float CannonReady);
+public record struct WeaponSummary(int LaserCount, float LaserReady, int CannonCount, float CannonReady, int MissileCount, float MissileReady);
 
 /// <summary>
 /// A spaceship made of modular components
@@ -98,10 +98,11 @@ public class Ship
         Components.Add(new Component(ComponentType.ENGINE, 4, 6));
         Components.Add(new Component(ComponentType.ENGINE, 4, 7));
 
-        // Weapons
+        // Weapons (lasers + cannon + a single missile bay)
         Components.Add(new Component(ComponentType.WEAPON_LASER, 3, 3));
         Components.Add(new Component(ComponentType.WEAPON_LASER, 5, 3));
         Components.Add(new Component(ComponentType.WEAPON_CANNON, 4, 2));
+        Components.Add(new Component(ComponentType.WEAPON_MISSILE, 4, 3));
 
         // Power
         Components.Add(new Component(ComponentType.POWER, 3, 5));
@@ -188,16 +189,19 @@ public class Ship
     /// </summary>
     public WeaponSummary GetWeaponSummary()
     {
-        const float LASER_MAX_CD  = 0.5f;
-        const float CANNON_MAX_CD = 1.5f;
+        const float LASER_MAX_CD   = 0.5f;
+        const float CANNON_MAX_CD  = 1.5f;
+        const float MISSILE_MAX_CD = 3.0f;
 
-        var lasers  = Components.Where(c => c.ComponentType == ComponentType.WEAPON_LASER  && c.Stats.Health > 0).ToList();
-        var cannons = Components.Where(c => c.ComponentType == ComponentType.WEAPON_CANNON && c.Stats.Health > 0).ToList();
+        var lasers   = Components.Where(c => c.ComponentType == ComponentType.WEAPON_LASER   && c.Stats.Health > 0).ToList();
+        var cannons  = Components.Where(c => c.ComponentType == ComponentType.WEAPON_CANNON  && c.Stats.Health > 0).ToList();
+        var missiles = Components.Where(c => c.ComponentType == ComponentType.WEAPON_MISSILE && c.Stats.Health > 0).ToList();
 
-        float laserReady  = lasers.Count  > 0 ? (float)lasers.Average(c  => Math.Clamp(1f - c.Cooldown / LASER_MAX_CD,  0f, 1f)) : -1f;
-        float cannonReady = cannons.Count > 0 ? (float)cannons.Average(c => Math.Clamp(1f - c.Cooldown / CANNON_MAX_CD, 0f, 1f)) : -1f;
+        float laserReady   = lasers.Count   > 0 ? (float)lasers.Average(c   => Math.Clamp(1f - c.Cooldown / LASER_MAX_CD,   0f, 1f)) : -1f;
+        float cannonReady  = cannons.Count  > 0 ? (float)cannons.Average(c  => Math.Clamp(1f - c.Cooldown / CANNON_MAX_CD,  0f, 1f)) : -1f;
+        float missileReady = missiles.Count > 0 ? (float)missiles.Average(c => Math.Clamp(1f - c.Cooldown / MISSILE_MAX_CD, 0f, 1f)) : -1f;
 
-        return new WeaponSummary(lasers.Count, laserReady, cannons.Count, cannonReady);
+        return new WeaponSummary(lasers.Count, laserReady, cannons.Count, cannonReady, missiles.Count, missileReady);
     }
 
     public void AddComponent(Component component)
@@ -449,31 +453,33 @@ public class Ship
             {
                 comp.Fire();
 
-                // Calculate projectile spawn position (in world space)
                 float localX = (comp.GridX - GridWidth / 2f) * Config.GRID_SIZE;
                 float localY = (comp.GridY - GridHeight / 2f) * Config.GRID_SIZE;
-
-                // Rotate by ship angle
                 float rotatedX = localX * (float)Math.Cos(Angle) - localY * (float)Math.Sin(Angle);
                 float rotatedY = localX * (float)Math.Sin(Angle) + localY * (float)Math.Cos(Angle);
-
                 float spawnX = X + rotatedX;
                 float spawnY = Y + rotatedY;
 
-                // Create projectile
-                string projType = comp.ComponentType == ComponentType.WEAPON_LASER ? "laser" : "cannon";
-                int damage = projType == "laser" ? 10 : 25;
-                float speed = projType == "laser" ? 500f : 350f;
-
-                var projectile = new Projectile(spawnX, spawnY, Angle, speed, damage, projType, ShipId);
-                projectiles.Add(projectile);
+                if (comp.ComponentType == ComponentType.WEAPON_MISSILE)
+                {
+                    // Unguided forward missile when no target
+                    var missile = new Missile(spawnX, spawnY, Angle, 260f, 60, ShipId, Target);
+                    projectiles.Add(missile);
+                }
+                else
+                {
+                    string projType = comp.ComponentType == ComponentType.WEAPON_LASER ? "laser" : "cannon";
+                    int damage = projType == "laser" ? 10 : 25;
+                    float speed = projType == "laser" ? 500f : 350f;
+                    projectiles.Add(new Projectile(spawnX, spawnY, Angle, speed, damage, projType, ShipId));
+                }
             }
         }
 
         return projectiles;
     }
 
-    public List<Projectile> FireWeaponsAtTarget(Vector2 targetPosition)
+    public List<Projectile> FireWeaponsAtTarget(Vector2 targetPosition, Ship? targetShip = null)
     {
         var projectiles = new List<Projectile>();
 
@@ -483,37 +489,46 @@ public class Ship
             {
                 comp.Fire();
 
-                // Calculate projectile spawn position (in world space)
                 float localX = (comp.GridX - GridWidth / 2f) * Config.GRID_SIZE;
                 float localY = (comp.GridY - GridHeight / 2f) * Config.GRID_SIZE;
-
-                // Rotate by ship angle
                 float rotatedX = localX * (float)Math.Cos(Angle) - localY * (float)Math.Sin(Angle);
                 float rotatedY = localX * (float)Math.Sin(Angle) + localY * (float)Math.Cos(Angle);
-
                 float spawnX = X + rotatedX;
                 float spawnY = Y + rotatedY;
 
-                // Calculate angle to target
-                float dx = targetPosition.X - spawnX;
-                float dy = targetPosition.Y - spawnY;
-                float targetAngle = (float)Math.Atan2(dy, dx);
-
-                // Create projectile aimed at target
-                string projType = comp.ComponentType == ComponentType.WEAPON_LASER ? "laser" : "cannon";
-                int damage = projType == "laser" ? 10 : 25;
-                float speed = projType == "laser" ? 500f : 350f;
-
-                var projectile = new Projectile(spawnX, spawnY, targetAngle, speed, damage, projType, ShipId);
-                projectiles.Add(projectile);
+                if (comp.ComponentType == ComponentType.WEAPON_MISSILE)
+                {
+                    // Guided missile toward the target ship
+                    float dx0 = targetPosition.X - spawnX;
+                    float dy0 = targetPosition.Y - spawnY;
+                    float launchAngle = MathF.Atan2(dy0, dx0);
+                    var missile = new Missile(spawnX, spawnY, launchAngle, 260f, 60, ShipId, targetShip);
+                    projectiles.Add(missile);
+                }
+                else
+                {
+                    float dx = targetPosition.X - spawnX;
+                    float dy = targetPosition.Y - spawnY;
+                    float targetAngle = (float)Math.Atan2(dy, dx);
+                    string projType = comp.ComponentType == ComponentType.WEAPON_LASER ? "laser" : "cannon";
+                    int damage = projType == "laser" ? 10 : 25;
+                    float speed = projType == "laser" ? 500f : 350f;
+                    projectiles.Add(new Projectile(spawnX, spawnY, targetAngle, speed, damage, projType, ShipId));
+                }
             }
         }
 
         return projectiles;
     }
 
+    /// <summary>Set to true for one frame whenever the last hit was a critical (landed on CORE or POWER).</summary>
+    public bool LastHitWasCritical { get; private set; }
+
     public void TakeDamage(int damage, float hitX, float hitY)
     {
+        // Reset per-frame flags
+        LastHitWasCritical = false;
+
         // Reset damage cooldown (blocks shield regen)
         _damageCooldown = DAMAGE_COOLDOWN_DURATION;
 
@@ -544,6 +559,13 @@ public class Ship
         var comp = GetComponentAt(gridX, gridY);
         if (comp != null)
         {
+            // Critical hit: landing on CORE or POWER deals double damage
+            if (comp.ComponentType == ComponentType.CORE || comp.ComponentType == ComponentType.POWER)
+            {
+                damage = (int)(damage * 2.0f);
+                LastHitWasCritical = true;
+            }
+
             bool destroyed = comp.TakeDamage(damage);
             if (destroyed)
                 Components.Remove(comp);

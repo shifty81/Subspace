@@ -58,9 +58,9 @@ Goal: Create a professional, informative interface
 
 #### 2.2 Ship Management UI
 - [ ] Fleet/ship selection bar at bottom
-- [ ] Component status panel
+- [x] Component status panel (selected ship shows per-component HP bars)
 - [ ] Resource counters (if economy added)
-- [ ] Minimap showing battlefield overview
+- [x] Minimap showing battlefield overview
 - [ ] Tactical zoom controls
 
 #### 2.3 Mission System UI
@@ -74,14 +74,14 @@ Goal: Create a professional, informative interface
 Goal: Add depth and variety to gameplay
 
 #### 3.1 Extended Combat
-- [ ] Additional weapon types (missiles, torpedoes, point defense)
+- [x] Additional weapon types (missiles — homing with turn rate, cyan exhaust)
 - [x] Shield systems with recharge mechanics
-- [ ] Critical hits and component-specific damage
+- [x] Critical hits and component-specific damage (2x damage on CORE/POWER, CRIT! label, particle burst)
 - [ ] Weapon targeting priorities
 - [ ] Formation combat for multiple ships
 
 #### 3.2 Ship Building
-- [ ] Ship templates and presets
+- [x] Ship templates and presets (F1=Assault, F2=Tanker, F3=Speed, F4=Default in build mode)
 - [ ] Save/load custom ship designs
 - [ ] Symmetry tools for building
 - [ ] Component rotation

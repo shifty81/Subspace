@@ -373,6 +373,60 @@ public class ParticleSystem
             smokeColor, true, false));
     }
 
+    /// <summary>Cyan exhaust burst when a missile is launched.</summary>
+    public void CreateMissileLaunch(float x, float y, float angle)
+    {
+        // Bright white flash at launch point
+        particles.Add(new Particle(x, y, 0, 0, 0.12f, 7f, Color.White, true, true));
+
+        // Cyan smoke trail puffs
+        for (int i = 0; i < 14; i++)
+        {
+            float spread = -0.4f + (float)random.NextDouble() * 0.8f;
+            float pa = angle + (float)Math.PI + spread;   // behind the missile
+            float speed = 50f + (float)random.NextDouble() * 80f;
+            particles.Add(new Particle(x, y,
+                MathF.Cos(pa) * speed, MathF.Sin(pa) * speed,
+                0.35f + (float)random.NextDouble() * 0.25f,
+                3f + (float)random.NextDouble() * 3f,
+                new Color(0, 180, 220), true, true));
+        }
+    }
+
+    /// <summary>
+    /// Bright multi-burst effect for a critical hit landing on a core or reactor component.
+    /// </summary>
+    public void CreateCriticalHit(float x, float y)
+    {
+        // Large central flash
+        particles.Add(new Particle(x, y, 0, 0, 0.18f, 16f, Color.White, true, true));
+        particles.Add(new Particle(x, y, 0, 0, 0.25f, 12f, new Color(255, 220, 0), true, true));
+        particles.Add(new Particle(x, y, 0, 0, 0.30f, 8f, new Color(255, 100, 0), true, true));
+
+        // Radial gold sparks
+        for (int i = 0; i < 28; i++)
+        {
+            float angle = (float)(random.NextDouble() * Math.PI * 2);
+            float speed = 150f + (float)random.NextDouble() * 200f;
+            Color[] cols = { Color.White, Color.Yellow, new Color(255, 200, 50), new Color(255, 140, 0) };
+            Color c = cols[random.Next(cols.Length)];
+            particles.Add(new Particle(x, y,
+                MathF.Cos(angle) * speed, MathF.Sin(angle) * speed,
+                0.35f + (float)random.NextDouble() * 0.35f,
+                2f + (float)random.NextDouble() * 4f, c, true, true));
+        }
+
+        // Outer ring
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = i * MathF.Tau / 20;
+            float speed = 260f;
+            particles.Add(new Particle(x, y,
+                MathF.Cos(angle) * speed, MathF.Sin(angle) * speed,
+                0.20f, 3f, new Color(255, 240, 100), true, true));
+        }
+    }
+
     public void Clear()
     {
         particles.Clear();

@@ -39,7 +39,13 @@ public class Game1 : Game
     private Ship? _player;
     private List<Ship> _enemies = new List<Ship>();
     private List<Projectile> _projectiles = new List<Projectile>();
+    private List<Missile> _missiles = new List<Missile>();
     private List<Asteroid> _asteroids = new List<Asteroid>();
+
+    // Floating critical-hit labels (world-space)
+    private record struct CritLabel(float X, float Y, float Timer);
+    private List<CritLabel> _critLabels = new();
+    private const float CRIT_LABEL_DURATION = 1.2f;
 
     // Ship builder state
     private string _builderSelectedType = ComponentType.ARMOR;
@@ -134,8 +140,10 @@ public class Game1 : Game
         _playerCombatTarget = null;
         _selectedShip = null;
         _projectiles.Clear();
+        _missiles.Clear();
         _enemyFireTimers.Clear();
         _damageIndicators.Clear();
+        _critLabels.Clear();
 
         // Create player ship
         _player = new Ship(Config.SCREEN_WIDTH / 2f, Config.SCREEN_HEIGHT / 2f, 0, true);
@@ -217,6 +225,82 @@ public class Game1 : Game
         EnemyType.Support => "SUPPORT",
         _                 => "SCOUT"
     };
+
+    /// <summary>
+    /// Replaces the player ship's components with a named preset layout.
+    /// Preserves position, velocity and crew.
+    /// </summary>
+    private void ApplyShipPreset(string preset)
+    {
+        if (_player == null) return;
+        _player.Components.Clear();
+
+        switch (preset)
+        {
+            case "assault":
+                // Heavy firepower — lasers, cannons, and a missile bay
+                _player.Components.Add(new Component(ComponentType.CORE, 4, 4));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 4, 6));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 4, 7));
+                _player.Components.Add(new Component(ComponentType.WEAPON_LASER, 3, 2));
+                _player.Components.Add(new Component(ComponentType.WEAPON_LASER, 5, 2));
+                _player.Components.Add(new Component(ComponentType.WEAPON_CANNON, 4, 1));
+                _player.Components.Add(new Component(ComponentType.WEAPON_MISSILE, 3, 3));
+                _player.Components.Add(new Component(ComponentType.WEAPON_MISSILE, 5, 3));
+                _player.Components.Add(new Component(ComponentType.POWER, 3, 5));
+                _player.Components.Add(new Component(ComponentType.POWER, 5, 5));
+                _player.Components.Add(new Component(ComponentType.ARMOR, 4, 5));
+                break;
+
+            case "tanker":
+                // Tank — heavy shields and armor, modest weapons
+                _player.Components.Add(new Component(ComponentType.CORE, 4, 4));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 4, 7));
+                _player.Components.Add(new Component(ComponentType.WEAPON_CANNON, 4, 2));
+                _player.Components.Add(new Component(ComponentType.POWER, 3, 5));
+                _player.Components.Add(new Component(ComponentType.POWER, 5, 5));
+                _player.Components.Add(new Component(ComponentType.SHIELD, 3, 3));
+                _player.Components.Add(new Component(ComponentType.SHIELD, 5, 3));
+                _player.Components.Add(new Component(ComponentType.SHIELD, 4, 5));
+                _player.Components.Add(new Component(ComponentType.ARMOR, 3, 4));
+                _player.Components.Add(new Component(ComponentType.ARMOR, 5, 4));
+                _player.Components.Add(new Component(ComponentType.ARMOR, 4, 3));
+                _player.Components.Add(new Component(ComponentType.ARMOR, 3, 6));
+                _player.Components.Add(new Component(ComponentType.ARMOR, 5, 6));
+                break;
+
+            case "speedrun":
+                // Speed demon — maximum thrust, light weapons
+                _player.Components.Add(new Component(ComponentType.CORE, 4, 4));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 3, 5));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 5, 5));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 3, 6));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 5, 6));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 4, 7));
+                _player.Components.Add(new Component(ComponentType.WEAPON_LASER, 4, 3));
+                _player.Components.Add(new Component(ComponentType.POWER, 4, 5));
+                break;
+
+            default:
+                // Default balanced layout
+                _player.Components.Add(new Component(ComponentType.CORE, 4, 4));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 4, 6));
+                _player.Components.Add(new Component(ComponentType.ENGINE, 4, 7));
+                _player.Components.Add(new Component(ComponentType.WEAPON_LASER, 3, 3));
+                _player.Components.Add(new Component(ComponentType.WEAPON_LASER, 5, 3));
+                _player.Components.Add(new Component(ComponentType.WEAPON_CANNON, 4, 2));
+                _player.Components.Add(new Component(ComponentType.POWER, 3, 5));
+                _player.Components.Add(new Component(ComponentType.POWER, 5, 5));
+                _player.Components.Add(new Component(ComponentType.ARMOR, 3, 4));
+                _player.Components.Add(new Component(ComponentType.ARMOR, 5, 4));
+                _player.Components.Add(new Component(ComponentType.ARMOR, 4, 5));
+                break;
+        }
+
+        // Force stat recalculation
+        _player.AddComponent(new Component(ComponentType.STRUCTURE, -1, -1)); // dummy to trigger recalc
+        _player.RemoveComponent(-1, -1);
+    }
 
     protected override void LoadContent()
     {
@@ -348,6 +432,16 @@ public class Game1 : Game
                 _builderSelectedType = ComponentType.CORRIDOR;
             else if (keyboardState.IsKeyDown(Keys.D0) && !_previousKeyboardState.IsKeyDown(Keys.D0))
                 _builderSelectedType = ComponentType.STRUCTURE;
+
+            // Ship preset templates (F1-F4)
+            if (keyboardState.IsKeyDown(Keys.F1) && !_previousKeyboardState.IsKeyDown(Keys.F1))
+                ApplyShipPreset("assault");
+            else if (keyboardState.IsKeyDown(Keys.F2) && !_previousKeyboardState.IsKeyDown(Keys.F2))
+                ApplyShipPreset("tanker");
+            else if (keyboardState.IsKeyDown(Keys.F3) && !_previousKeyboardState.IsKeyDown(Keys.F3))
+                ApplyShipPreset("speedrun");
+            else if (keyboardState.IsKeyDown(Keys.F4) && !_previousKeyboardState.IsKeyDown(Keys.F4))
+                ApplyShipPreset("default");
 
             // Handle mouse clicks in build mode
             if (mouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released)
@@ -493,6 +587,16 @@ public class Game1 : Game
                 _damageIndicators[i] = _damageIndicators[i] with { Timer = newTimer };
         }
 
+        // ── Critical-hit label timers ───────────────────────────────────────
+        for (int i = _critLabels.Count - 1; i >= 0; i--)
+        {
+            float newTimer = _critLabels[i].Timer - dt;
+            if (newTimer <= 0f)
+                _critLabels.RemoveAt(i);
+            else
+                _critLabels[i] = _critLabels[i] with { Timer = newTimer };
+        }
+
         // ── Wave clear ──────────────────────────────────────────────────────
         if (_waveClearPending)
         {
@@ -568,25 +672,21 @@ public class Game1 : Game
             if (_autoFireTimer <= 0f)
             {
                 _autoFireTimer = AUTO_FIRE_INTERVAL;
-                var autos = _player.FireWeaponsAtTarget(new Vector2(_playerCombatTarget.X, _playerCombatTarget.Y));
-                _projectiles.AddRange(autos);
-                foreach (var proj in autos)
-                    _particles?.CreateWeaponFireEffect(proj.X, proj.Y, proj.Angle, proj.ProjectileType);
+                var autos = _player.FireWeaponsAtTarget(new Vector2(_playerCombatTarget.X, _playerCombatTarget.Y), _playerCombatTarget);
+                AddProjectilesAndMissiles(autos, false);
             }
         }
 
         if (keyboardState.IsKeyDown(Keys.Space))
         {
             // Manual fire: toward combat target if set, otherwise straight ahead
-            List<Projectile> projectiles;
+            List<Projectile> fired;
             if (_playerCombatTarget != null && !_playerCombatTarget.IsDestroyed())
-                projectiles = _player.FireWeaponsAtTarget(new Vector2(_playerCombatTarget.X, _playerCombatTarget.Y));
+                fired = _player.FireWeaponsAtTarget(new Vector2(_playerCombatTarget.X, _playerCombatTarget.Y), _playerCombatTarget);
             else
-                projectiles = _player.FireWeapons();
+                fired = _player.FireWeapons();
 
-            _projectiles.AddRange(projectiles);
-            foreach (var proj in projectiles)
-                _particles?.CreateWeaponFireEffect(proj.X, proj.Y, proj.Angle, proj.ProjectileType);
+            AddProjectilesAndMissiles(fired, false);
         }
 
         // Update player
@@ -605,10 +705,8 @@ public class Game1 : Game
             if (fireTimer <= 0f)
             {
                 fireTimer = ENEMY_FIRE_INTERVAL;
-                var projectiles = enemy.FireWeapons();
-                _projectiles.AddRange(projectiles);
-                foreach (var proj in projectiles)
-                    _particles?.CreateWeaponFireEffect(proj.X, proj.Y, proj.Angle, proj.ProjectileType);
+                var fired = enemy.FireWeapons();
+                AddProjectilesAndMissiles(fired, false);
             }
             _enemyFireTimers[enemy.ShipId] = fireTimer;
         }
@@ -650,6 +748,14 @@ public class Game1 : Game
                 _projectiles.Remove(proj);
         }
 
+        // Update homing missiles
+        foreach (var missile in _missiles.ToList())
+        {
+            missile.Update(dt);
+            if (!missile.Alive)
+                _missiles.Remove(missile);
+        }
+
         // Check collisions
         CheckCollisions();
 
@@ -672,6 +778,29 @@ public class Game1 : Game
         UpdateCamera();
     }
 
+    /// <summary>
+    /// Sorts new projectiles into either the regular list or the missile list,
+    /// and creates the appropriate particle effect for each.
+    /// </summary>
+    private void AddProjectilesAndMissiles(List<Projectile> fired, bool suppressParticles)
+    {
+        foreach (var proj in fired)
+        {
+            if (proj is Missile missile)
+            {
+                _missiles.Add(missile);
+                if (!suppressParticles)
+                    _particles?.CreateMissileLaunch(missile.X, missile.Y, missile.Angle);
+            }
+            else
+            {
+                _projectiles.Add(proj);
+                if (!suppressParticles)
+                    _particles?.CreateWeaponFireEffect(proj.X, proj.Y, proj.Angle, proj.ProjectileType);
+            }
+        }
+    }
+
     private void UpdateCamera()
     {
         if (_player == null) return;
@@ -684,6 +813,22 @@ public class Game1 : Game
         if (_player == null)
             return;
 
+        // Helper to apply a projectile hit and handle crit/shield feedback
+        void ApplyHit(Ship ship, Projectile proj)
+        {
+            ship.TakeDamage(proj.Damage, proj.X, proj.Y);
+            if (ship.LastHitWasShielded)
+                _particles?.CreateShieldImpact(proj.X, proj.Y);
+            else if (ship.LastHitWasCritical)
+            {
+                _particles?.CreateCriticalHit(proj.X, proj.Y);
+                _critLabels.Add(new CritLabel(proj.X, proj.Y - 20, CRIT_LABEL_DURATION));
+            }
+            else
+                _particles?.CreateDamageSparks(proj.X, proj.Y);
+        }
+
+        // ── Regular projectiles ─────────────────────────────────────────────
         foreach (var proj in _projectiles.ToList())
         {
             if (!proj.Alive)
@@ -710,18 +855,12 @@ public class Game1 : Game
                 var playerBounds = _player.GetBounds();
                 if (proj.CheckCollision(playerBounds))
                 {
-                    _player.TakeDamage(proj.Damage, proj.X, proj.Y);
-                    if (_player.LastHitWasShielded)
-                        _particles?.CreateShieldImpact(proj.X, proj.Y);
-                    else
-                        _particles?.CreateDamageSparks(proj.X, proj.Y);
-                    // Record directional hit indicator
+                    ApplyHit(_player, proj);
                     float hitAngle = MathF.Atan2(proj.Y - _player.Y, proj.X - _player.X);
                     _damageIndicators.Add(new DamageIndicator(hitAngle, DAMAGE_INDICATOR_DURATION));
                     proj.Alive = false;
                 }
             }
-
             if (!proj.Alive) continue;
 
             // Check collision with enemies
@@ -732,12 +871,55 @@ public class Game1 : Game
                     var enemyBounds = enemy.GetBounds();
                     if (proj.CheckCollision(enemyBounds))
                     {
-                        enemy.TakeDamage(proj.Damage, proj.X, proj.Y);
-                        if (enemy.LastHitWasShielded)
-                            _particles?.CreateShieldImpact(proj.X, proj.Y);
-                        else
-                            _particles?.CreateDamageSparks(proj.X, proj.Y);
+                        ApplyHit(enemy, proj);
                         proj.Alive = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // ── Missiles ────────────────────────────────────────────────────────
+        foreach (var missile in _missiles.ToList())
+        {
+            if (!missile.Alive) continue;
+
+            // Asteroid collision
+            foreach (var ast in _asteroids)
+            {
+                if (ast.ContainsPoint(missile.X, missile.Y))
+                {
+                    _particles?.CreateExplosion(missile.X, missile.Y, "small");
+                    missile.Alive = false;
+                    break;
+                }
+            }
+            if (!missile.Alive) continue;
+
+            // Player hit
+            if (missile.OwnerId != _player.ShipId)
+            {
+                if (_player.GetBounds().Contains((int)missile.X, (int)missile.Y))
+                {
+                    ApplyHit(_player, missile);
+                    _particles?.CreateExplosion(missile.X, missile.Y, "medium");
+                    float hitAngle = MathF.Atan2(missile.Y - _player.Y, missile.X - _player.X);
+                    _damageIndicators.Add(new DamageIndicator(hitAngle, DAMAGE_INDICATOR_DURATION));
+                    missile.Alive = false;
+                }
+            }
+            if (!missile.Alive) continue;
+
+            // Enemy hit
+            foreach (var enemy in _enemies)
+            {
+                if (missile.OwnerId != enemy.ShipId)
+                {
+                    if (enemy.GetBounds().Contains((int)missile.X, (int)missile.Y))
+                    {
+                        ApplyHit(enemy, missile);
+                        _particles?.CreateExplosion(missile.X, missile.Y, "medium");
+                        missile.Alive = false;
                         break;
                     }
                 }
@@ -793,6 +975,10 @@ public class Game1 : Game
         // Draw projectiles
         foreach (var proj in _projectiles)
             proj.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY);
+
+        // Draw missiles
+        foreach (var missile in _missiles)
+            missile.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY);
 
         // Draw world-space UI overlays (health bars, move/combat target indicators)
         DrawWorldSpaceUI();
@@ -928,8 +1114,8 @@ public class Game1 : Game
         if (_mode == Config.MODE_BUILD)
         {
             int by = panelH + UI_PAD * 3;
-            int bpW = 500;
-            int bpH = lh * 3 + UI_PAD * 2;
+            int bpW = 560;
+            int bpH = lh * 4 + UI_PAD * 2;
             _spriteBatch.Draw(_pixelTexture, new Rectangle(UI_PAD, by, bpW, bpH), Color.Black * 0.78f);
             DrawRectangleBorder(UI_PAD, by, bpW, bpH, Color.Yellow * 0.6f);
             int bx = UI_PAD + UI_PAD; int byt = by + UI_PAD;
@@ -938,13 +1124,21 @@ public class Game1 : Game
             _pixelFont.DrawString(_spriteBatch, "1:Armor 2:Engine 3:Laser 4:Cannon 5:Reactor 6:Shield", bx, byt, Color.LightGray, S);
             byt += lh + 2;
             _pixelFont.DrawString(_spriteBatch, "7:Crew 8:Ammo 9:Corridor 0:Structure  [L:Place  R:Remove]", bx, byt, Color.Gray, S);
+            byt += lh + 2;
+            _pixelFont.DrawString(_spriteBatch, "F1:Assault  F2:Tanker  F3:Speed  F4:Default (preset templates)", bx, byt, new Color(160, 200, 160), S);
         }
+
+        // ── Component status panel (when a ship is selected) ─────────────────
+        if (_selectedShip != null)
+            DrawComponentStatusPanel();
 
         // ── Bottom controls bar ─────────────────────────────────────────────
         int cbH = lh + UI_PAD * 2;
         _spriteBatch.Draw(_pixelTexture, new Rectangle(0, Config.SCREEN_HEIGHT - cbH, Config.SCREEN_WIDTH, cbH), Color.Black * 0.85f);
-        _pixelFont.DrawString(_spriteBatch,
-            "WASD:Move  Space:Fire  RClick Enemy:Lock  RClick Space:Autopilot  Scroll:Zoom  B:Build  P:Pause  R:Reset  ESC:Quit",
+        string ctrlsText = _mode == Config.MODE_BUILD
+            ? "WASD:Move  B:Exit-Build  F1-F4:Presets  1-0:Select-Type  L:Place  R:Remove  P:Pause  R:Reset  ESC:Quit"
+            : "WASD:Move  Space:Fire  RClick-Enemy:Lock  RClick-Space:Autopilot  Scroll:Zoom  B:Build  P:Pause  R:Reset  ESC:Quit";
+        _pixelFont.DrawString(_spriteBatch, ctrlsText,
             UI_PAD, Config.SCREEN_HEIGHT - cbH + UI_PAD, new Color(150, 150, 150), S);
 
         // ── Minimap ─────────────────────────────────────────────────────────
@@ -985,6 +1179,20 @@ public class Game1 : Game
             float pulse = MathF.Sin(_gameTime * 6f) * 0.3f + 0.7f;
             DrawCircleOutline(tx2, ty2, 38, Color.Red * pulse);
             DrawCircleOutline(tx2, ty2, 32, Color.OrangeRed * (pulse * 0.5f));
+        }
+
+        // Floating "CRIT!" labels
+        const int CS = 2;
+        foreach (var lbl in _critLabels)
+        {
+            float t = lbl.Timer / CRIT_LABEL_DURATION;
+            float alpha = t * t;
+            float rise = (1f - t) * 30f;   // floats upward as it fades
+            int lx = (int)(lbl.X - _cameraX);
+            int ly = (int)(lbl.Y - _cameraY - rise);
+            string critText = "CRIT!";
+            int tw = _pixelFont.MeasureWidth(critText, CS);
+            _pixelFont.DrawString(_spriteBatch, critText, lx - tw / 2, ly, Color.Yellow * alpha, CS);
         }
     }
 
@@ -1047,12 +1255,15 @@ public class Game1 : Game
     {
         if (_player == null) return;
         var ws = _player.GetWeaponSummary();
-        if (ws.LaserCount <= 0 && ws.CannonCount <= 0) return;
+        if (ws.LaserCount <= 0 && ws.CannonCount <= 0 && ws.MissileCount <= 0) return;
 
         const int S = 2;
         int lh = _pixelFont.LineHeight(S);
 
-        int rows  = (ws.LaserCount  > 0 ? 1 : 0) + (ws.CannonCount > 0 ? 1 : 0) + 1; // +1 for header
+        int rows  = (ws.LaserCount   > 0 ? 1 : 0)
+                  + (ws.CannonCount  > 0 ? 1 : 0)
+                  + (ws.MissileCount > 0 ? 1 : 0)
+                  + 1; // +1 for header
         int panelH = rows * (lh + 2) + UI_PAD * 2;
         int panelW = 200;
         int panelY = UI_PAD + mainPanelH + UI_PAD;
@@ -1089,6 +1300,69 @@ public class Game1 : Game
                     new Color(50, 20, 0));
             string label = ready ? $"READY x{ws.CannonCount}" : "...";
             _pixelFont.DrawString(_spriteBatch, label, tx + labelW + 2, ty, Color.White, S);
+            ty += lh + 2;
+        }
+
+        if (ws.MissileCount > 0)
+        {
+            _pixelFont.DrawString(_spriteBatch, "MSL", tx, ty, new Color(0, 200, 230), S);
+            bool ready = ws.MissileReady >= 0.99f;
+            DrawBar(tx + labelW, ty, barW, lh - 2, ws.MissileReady,
+                    ready ? new Color(0, 200, 230) : new Color(0, 90, 110),
+                    new Color(0, 30, 40));
+            string label = ready ? $"READY x{ws.MissileCount}" : "...";
+            _pixelFont.DrawString(_spriteBatch, label, tx + labelW + 2, ty, Color.White, S);
+        }
+    }
+
+    /// <summary>
+    /// Right-side component status panel shown when a ship is selected.
+    /// Lists each component with its name and HP bar.
+    /// </summary>
+    private void DrawComponentStatusPanel()
+    {
+        if (_selectedShip == null) return;
+
+        const int S = 1;
+        int lh = _pixelFont.LineHeight(S);
+
+        var comps = _selectedShip.Components;
+        if (comps.Count == 0) return;
+
+        int panelW = 190;
+        int panelH = (comps.Count + 1) * (lh + 2) + UI_PAD * 2;
+        int panelX = Config.SCREEN_WIDTH - panelW - UI_PAD;
+        // Position below the target label (if visible) or at top-right
+        int panelY = UI_PAD + (_playerCombatTarget != null ? _pixelFont.LineHeight(2) + UI_PAD * 2 : 0)
+                              + (_playerMoveTarget.HasValue ? _pixelFont.LineHeight(2) + UI_PAD * 2 : 0)
+                              + UI_PAD * 4;
+
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(panelX, panelY, panelW, panelH), Color.Black * 0.82f);
+        DrawRectangleBorder(panelX, panelY, panelW, panelH, Color.Yellow * 0.55f);
+
+        int tx = panelX + UI_PAD;
+        int ty = panelY + UI_PAD;
+
+        string shipLabel = _selectedShip.IsPlayer ? "YOUR SHIP" : $"{EnemyTypeName(_selectedShip.EnemyType)} #{_selectedShip.ShipId}";
+        _pixelFont.DrawString(_spriteBatch, shipLabel, tx, ty, Color.Yellow, S);
+        ty += lh + 2;
+
+        int nameW  = _pixelFont.MeasureWidth("ENGINE_ROOM ", S);
+        int barW   = panelW - nameW - UI_PAD * 2;
+
+        foreach (var comp in comps)
+        {
+            bool alive = comp.Stats.Health > 0;
+            float hpFrac = comp.Stats.MaxHealth > 0 ? (float)comp.Stats.Health / comp.Stats.MaxHealth : 0f;
+
+            Color nameColor = alive ? Color.LightGray : new Color(80, 80, 80);
+            string name = comp.Stats.Name.ToUpper();
+            _pixelFont.DrawString(_spriteBatch, name, tx, ty, nameColor, S);
+
+            Color barFill = hpFrac > 0.5f ? Color.Green : (hpFrac > 0.25f ? Color.Yellow : Color.Red);
+            DrawBar(tx + nameW, ty, barW, lh - 1, hpFrac, alive ? barFill : Color.DarkGray, new Color(20, 20, 20));
+
+            ty += lh + 2;
         }
     }
 
