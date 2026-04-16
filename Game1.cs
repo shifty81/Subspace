@@ -387,9 +387,7 @@ public class Game1 : Game
         _sceneManager.Initialize(_pixelTexture);
         _shipInteriorGrid = InteriorGrid.CreateStarterShip();
 
-        // Create a null-object "space scene" reference for the interior to return to
-        // (the interior scene just calls TransitionTo back to null, which we handle in Update)
-        _interiorScene = new ShipInteriorScene(_sceneManager, null!);
+        _interiorScene = new ShipInteriorScene(_sceneManager);
         _interiorScene.SetResources(_pixelFont, _pixelTexture);
 
         // Register GameState player ship
@@ -403,13 +401,11 @@ public class Game1 : Game
         // ── Interior scene is active ──────────────────────────────────────────
         if (_isInInterior)
         {
-            KeyboardState ks = Keyboard.GetState();
             _sceneManager.Update(dt);
             _sceneManager.UpdateScene(dt);
 
-            // Detect when the interior scene requests a return to space
-            // (Interior scene calls TransitionTo(null!) which sets Current to null)
-            if (_sceneManager.Current == null)
+            // Detect when the interior scene signals it wants to return to space
+            if (_interiorScene?.ExitRequested == true)
                 _isInInterior = false;
 
             _gameTime += dt;

@@ -23,13 +23,17 @@ public enum InteriorMode { Walking, Building }
 
 /// <summary>
 /// The ship interior scene: 96-px tile grid, player character, crew, build mode.
-/// Transitions back to SpaceScene when the player pilots the ship from the helm.
+/// Signals exit via <see cref="ExitRequested"/> so Game1 doesn't need to pass
+/// a back-reference to itself.
 /// </summary>
 public class ShipInteriorScene : IScene
 {
+    // ── Public exit signal ────────────────────────────────────────────────────
+    /// <summary>Set to true for one frame when the player exits to space.</summary>
+    public bool ExitRequested { get; private set; }
+
     // ── Dependencies ─────────────────────────────────────────────────────────
     private readonly SceneManager _scenes;
-    private readonly IScene _spaceScene;
 
     // ── Ship / Grid data ──────────────────────────────────────────────────────
     private Ship? _ship;
@@ -77,10 +81,9 @@ public class ShipInteriorScene : IScene
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public ShipInteriorScene(SceneManager scenes, IScene spaceScene)
+    public ShipInteriorScene(SceneManager scenes)
     {
-        _scenes     = scenes;
-        _spaceScene = spaceScene;
+        _scenes = scenes;
     }
 
     // ── IScene ────────────────────────────────────────────────────────────────
@@ -89,6 +92,7 @@ public class ShipInteriorScene : IScene
     {
         _gameTime = 0f;
         _pilotingRequested = false;
+        ExitRequested = false;
 
         if (context is InteriorContext ctx)
         {
@@ -125,7 +129,7 @@ public class ShipInteriorScene : IScene
         _camX = startX - Config.SCREEN_WIDTH  / 2f;
         _camY = startY - Config.SCREEN_HEIGHT / 2f;
 
-        Notify("Press I / Tab to exit interior.  E to interact.  B to build.");
+        Notify("Press I/Tab to exit interior.  E to interact.  B to build.");
     }
 
     public void Exit() { }
@@ -142,7 +146,7 @@ public class ShipInteriorScene : IScene
         bool exitKey = WasJustPressed(Keys.I, keys) || WasJustPressed(Keys.Tab, keys);
         if (exitKey || _pilotingRequested)
         {
-            _scenes.TransitionTo(_spaceScene);
+            ExitRequested = true;
             _prevKeys = keys;
             return;
         }

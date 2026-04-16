@@ -83,9 +83,9 @@ public class CrewMember
 
     public MoodLevel MoodLevel => Mood switch
     {
-        < 0.2f => global::Subspace.MoodLevel.Breakdown,
-        < 0.5f => global::Subspace.MoodLevel.Unhappy,
-        _      => global::Subspace.MoodLevel.Fine,
+        < 0.2f => MoodLevel.Breakdown,
+        < 0.5f => MoodLevel.Unhappy,
+        _      => MoodLevel.Fine,
     };
 
     // ── Work priorities ───────────────────────────────────────────────────────
@@ -98,9 +98,9 @@ public class CrewMember
     // ── Work speed modifier (affected by mood) ────────────────────────────────
     public float WorkSpeedFactor => MoodLevel switch
     {
-        global::Subspace.MoodLevel.Breakdown => 0.3f,
-        global::Subspace.MoodLevel.Unhappy   => 0.7f,
-        _                                    => 1.0f,
+        MoodLevel.Breakdown => 0.3f,
+        MoodLevel.Unhappy   => 0.7f,
+        _                   => 1.0f,
     };
 
     // ── Constants ─────────────────────────────────────────────────────────────
@@ -229,9 +229,9 @@ public class CrewMember
         // Mood indicator dot above head
         Color moodCol = MoodLevel switch
         {
-            global::Subspace.MoodLevel.Fine      => Color.Green,
-            global::Subspace.MoodLevel.Unhappy   => Color.Yellow,
-            _                                    => Color.Red,
+            MoodLevel.Fine    => Color.Green,
+            MoodLevel.Unhappy => Color.Yellow,
+            _                 => Color.Red,
         };
         sb.Draw(pixel, new Rectangle(sx - 2, sy - 28, 4, 4), moodCol);
 
