@@ -48,6 +48,10 @@ public class Game1 : Game
     private Vector2? _playerMoveTarget = null;
     private Ship? _playerCombatTarget = null;
 
+    // Autopilot constants
+    private const float AUTOPILOT_ARRIVAL_THRESHOLD = 30f;
+    private const float AUTOPILOT_ANGLE_THRESHOLD = 0.15f;
+
     // UI
     private PixelFont _pixelFont = null!;
 
@@ -402,7 +406,7 @@ public class Game1 : Game
             float dy = _playerMoveTarget.Value.Y - _player.Y;
             float dist = MathF.Sqrt(dx * dx + dy * dy);
 
-            if (dist < 30f)
+            if (dist < AUTOPILOT_ARRIVAL_THRESHOLD)
             {
                 _playerMoveTarget = null;
             }
@@ -413,7 +417,7 @@ public class Game1 : Game
                 while (angleDiff > MathF.PI) angleDiff -= 2 * MathF.PI;
                 while (angleDiff < -MathF.PI) angleDiff += 2 * MathF.PI;
 
-                if (MathF.Abs(angleDiff) > 0.15f)
+                if (MathF.Abs(angleDiff) > AUTOPILOT_ANGLE_THRESHOLD)
                     _player.Rotate(angleDiff > 0 ? 1 : -1, dt);
                 else
                     _player.ApplyThrust(dt, _particles);
@@ -630,7 +634,7 @@ public class Game1 : Game
         int wk = _player.CrewManager?.GetWorkingCrew() ?? 0;
         int tot = _player.CrewManager?.GetTotalCrew() ?? 0;
         _pixelFont.DrawString(_spriteBatch,
-            $"CREW {wk}/{tot}  ZOOM {_cameraZoom:F1}x  {_enemies.Count} enemy",
+            $"CREW {wk}/{tot}  ZOOM {_cameraZoom:F1}x  {_enemies.Count} {(_enemies.Count == 1 ? "enemy" : "enemies")}",
             tx, ty, new Color(170, 170, 170), S);
         ty += lh + 2;
 

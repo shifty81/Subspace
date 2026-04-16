@@ -473,8 +473,8 @@ public class Ship
 
         // Restart the world spriteBatch with the correct zoom transform so subsequent
         // draws (other ships, projectiles, indicators) are all properly scaled.
-        Matrix worldTransform = Matrix.CreateScale(zoom);
-        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, null, null, null, null, worldTransform);
+        Matrix zoomTransform = Matrix.CreateScale(zoom);
+        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, null, null, null, null, zoomTransform);
 
         // Draw rotated ship onto the main surface
         spriteBatch.Draw(
