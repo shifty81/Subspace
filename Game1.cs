@@ -85,6 +85,12 @@ public class Game1 : Game
     private const int MINIMAP_SIZE = 150;
     private const float MINIMAP_WORLD_RADIUS = 1200f;
 
+    // ── Scene management (interior / station / planet overlay) ───────────────
+    private SceneManager _sceneManager = new SceneManager();
+    private ShipInteriorScene? _interiorScene;
+    private InteriorGrid? _shipInteriorGrid;
+    private bool _isInInterior = false;
+
     // Shared UI padding (pixels)
     private const int UI_PAD = 6;
 
@@ -148,6 +154,9 @@ public class Game1 : Game
         // Create player ship
         _player = new Ship(Config.SCREEN_WIDTH / 2f, Config.SCREEN_HEIGHT / 2f, 0, true);
 
+        // Sync with GameState
+        GameState.Instance.PlayerShip = _player;
+
         // Scatter asteroids around the arena (persistent across waves)
         _asteroids.Clear();
         SpawnAsteroids();
@@ -155,6 +164,18 @@ public class Game1 : Game
         // Spawn initial wave of enemies
         _enemies.Clear();
         SpawnWave();
+    }
+
+    /// <summary>
+    /// Switch to the ship interior scene.  Called when the player presses I.
+    /// </summary>
+    private void EnterInterior()
+    {
+        if (_interiorScene == null || _shipInteriorGrid == null) return;
+        _isInInterior = true;
+
+        var ctx = new InteriorContext(_player ?? GameState.Instance.PlayerShip!, _shipInteriorGrid);
+        _sceneManager.SetImmediate(_interiorScene, ctx);
     }
 
     private void SpawnAsteroids()
@@ -361,11 +382,40 @@ public class Game1 : Game
 
         // Note: In a real game, you would load a font from Content pipeline
         // For now, we'll skip text rendering or use a basic approach
+
+        // ── Set up SceneManager and interior scene ────────────────────────────
+        _sceneManager.Initialize(_pixelTexture);
+        _shipInteriorGrid = InteriorGrid.CreateStarterShip();
+
+        // Create a null-object "space scene" reference for the interior to return to
+        // (the interior scene just calls TransitionTo back to null, which we handle in Update)
+        _interiorScene = new ShipInteriorScene(_sceneManager, null!);
+        _interiorScene.SetResources(_pixelFont, _pixelTexture);
+
+        // Register GameState player ship
+        GameState.Instance.PlayerShip = _player;
     }
 
     protected override void Update(GameTime gameTime)
     {
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+        // ── Interior scene is active ──────────────────────────────────────────
+        if (_isInInterior)
+        {
+            KeyboardState ks = Keyboard.GetState();
+            _sceneManager.Update(dt);
+            _sceneManager.UpdateScene(dt);
+
+            // Detect when the interior scene requests a return to space
+            // (Interior scene calls TransitionTo(null!) which sets Current to null)
+            if (_sceneManager.Current == null)
+                _isInInterior = false;
+
+            _gameTime += dt;
+            base.Update(gameTime);
+            return;
+        }
 
         HandleInput();
 
@@ -398,6 +448,10 @@ public class Game1 : Game
         // Check for reset
         if (keyboardState.IsKeyDown(Keys.R) && !_previousKeyboardState.IsKeyDown(Keys.R))
             InitGame();
+
+        // Enter ship interior (I key)
+        if (keyboardState.IsKeyDown(Keys.I) && !_previousKeyboardState.IsKeyDown(Keys.I))
+            EnterInterior();
 
         // Camera zoom with mouse wheel
         int scrollDelta = mouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
@@ -932,6 +986,20 @@ public class Game1 : Game
 
     protected override void Draw(GameTime gameTime)
     {
+        // ── Interior scene override ───────────────────────────────────────────
+        if (_isInInterior)
+        {
+            GraphicsDevice.Clear(new Color(15, 15, 20));
+
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
+            _sceneManager.DrawWorld(_spriteBatch, _pixelTexture, _gameTime);
+            _sceneManager.DrawUI(_spriteBatch, _pixelTexture, _gameTime);
+            _spriteBatch.End();
+
+            base.Draw(gameTime);
+            return;
+        }
+
         // Pre-render every ship's component surface onto its cached RenderTarget2D
         // BEFORE touching the backbuffer.  This keeps all render-target switches
         // out of the main draw pass so the backbuffer is never discarded mid-frame.
@@ -1144,7 +1212,7 @@ public class Game1 : Game
         _spriteBatch.Draw(_pixelTexture, new Rectangle(0, Config.SCREEN_HEIGHT - cbH, Config.SCREEN_WIDTH, cbH), Color.Black * 0.85f);
         string ctrlsText = _mode == Config.MODE_BUILD
             ? "WASD:Move  B:Exit-Build  F1-F4:Presets  1-0:Select-Type  L:Place  R:Remove  P:Pause  R:Reset  ESC:Quit"
-            : "WASD:Move  Space:Fire  RClick-Enemy:Lock  RClick-Space:Autopilot  Scroll:Zoom  B:Build  P:Pause  R:Reset  ESC:Quit";
+            : "WASD:Move  Space:Fire  RClick-Enemy:Lock  RClick-Space:Autopilot  Scroll:Zoom  B:Build  I:Interior  P:Pause  R:Reset  ESC:Quit";
         _pixelFont.DrawString(_spriteBatch, ctrlsText,
             UI_PAD, Config.SCREEN_HEIGHT - cbH + UI_PAD, new Color(150, 150, 150), S);
 
