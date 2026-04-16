@@ -364,6 +364,15 @@ public class Ship
 
     public void TakeDamage(int damage, float hitX, float hitY)
     {
+        // Shield absorption: each functional shield reduces damage by 20%, capped at 70%
+        int shieldCount = Components.Count(c =>
+            c.ComponentType == ComponentType.SHIELD && c.Stats.Health > 0);
+        if (shieldCount > 0)
+        {
+            float absorption = Math.Min(0.70f, shieldCount * 0.20f);
+            damage = Math.Max(1, (int)(damage * (1f - absorption)));
+        }
+
         // Convert world position to local grid position
         float localX = hitX - X;
         float localY = hitY - Y;

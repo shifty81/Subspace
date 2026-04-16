@@ -52,6 +52,26 @@ public class Game1 : Game
     private const float AUTOPILOT_ARRIVAL_THRESHOLD = 30f;
     private const float AUTOPILOT_ANGLE_THRESHOLD = 0.15f;
 
+    // Wave / score
+    private int _wave = 1;
+    private int _score = 0;
+    private int _kills = 0;
+    private bool _gameOver = false;
+    private bool _waveClearPending = false;
+    private float _waveClearTimer = 0f;
+    private const float WAVE_CLEAR_DELAY = 2.5f;
+
+    // Auto-fire at combat target
+    private float _autoFireTimer = 0f;
+    private const float AUTO_FIRE_INTERVAL = 0.35f;
+
+    // Minimap
+    private const int MINIMAP_SIZE = 150;
+    private const float MINIMAP_WORLD_RADIUS = 1200f;
+
+    // Shared UI padding (pixels)
+    private const int UI_PAD = 6;
+
     // UI
     private PixelFont _pixelFont = null!;
 
@@ -92,33 +112,54 @@ public class Game1 : Game
 
     private void InitGame()
     {
+        // Reset wave / score / game state
+        _wave = 1;
+        _score = 0;
+        _kills = 0;
+        _gameOver = false;
+        _waveClearPending = false;
+        _waveClearTimer = 0f;
+        _autoFireTimer = 0f;
+        _playerMoveTarget = null;
+        _playerCombatTarget = null;
+        _selectedShip = null;
+        _projectiles.Clear();
+
         // Create player ship
         _player = new Ship(Config.SCREEN_WIDTH / 2f, Config.SCREEN_HEIGHT / 2f, 0, true);
 
-        // Create enemy ships
+        // Spawn initial wave of enemies
         _enemies.Clear();
-        for (int i = 0; i < 3; i++)
+        SpawnWave();
+    }
+
+    private void SpawnWave()
+    {
+        // Wave 1 → 3 enemies, each subsequent wave adds 1 more
+        int count = 2 + _wave;
+
+        // Spawn radius grows slightly each wave so enemies aren't on top of the player
+        float spawnRadius = 400f + _wave * 80f;
+
+        int nextId = (_enemies.Count > 0 ? _enemies.Max(e => e.ShipId) : 0) + 1;
+
+        for (int i = 0; i < count; i++)
         {
-            float x = _random.Next(100, Config.SCREEN_WIDTH - 100);
-            float y = _random.Next(100, Config.SCREEN_HEIGHT - 100);
+            float angle = _random.NextSingle() * MathF.Tau;
+            float dist  = spawnRadius + _random.NextSingle() * 200f;
 
-            // Make sure enemies don't spawn too close to player
-            while (Math.Sqrt(Math.Pow(x - _player.X, 2) + Math.Pow(y - _player.Y, 2)) < 300)
-            {
-                x = _random.Next(100, Config.SCREEN_WIDTH - 100);
-                y = _random.Next(100, Config.SCREEN_HEIGHT - 100);
-            }
+            float cx = _player?.X ?? Config.SCREEN_WIDTH / 2f;
+            float cy = _player?.Y ?? Config.SCREEN_HEIGHT / 2f;
+            float x  = cx + MathF.Cos(angle) * dist;
+            float y  = cy + MathF.Sin(angle) * dist;
 
-            var enemy = new Ship(x, y, i + 1, false);
+            var enemy = new Ship(x, y, nextId++, false);
 
-            // Assign a random pre-rendered sprite if available
             if (_enemyShipSprites.Count > 0)
                 enemy.PrerenderedTexture = _enemyShipSprites[_random.Next(_enemyShipSprites.Count)];
 
             _enemies.Add(enemy);
         }
-
-        _projectiles.Clear();
     }
 
     protected override void LoadContent()
@@ -374,6 +415,37 @@ public class Game1 : Game
         if (_player == null)
             return;
 
+        // ── Game over state ─────────────────────────────────────────────────
+        if (_gameOver)
+            return;  // stop updating; player presses R to restart
+
+        if (_player.IsDestroyed())
+        {
+            _gameOver = true;
+            _particles?.CreateExplosion(_player.X, _player.Y, "large");
+            _particles?.CreateExplosion(_player.X, _player.Y, "large");
+            return;
+        }
+
+        // ── Wave clear ──────────────────────────────────────────────────────
+        if (_waveClearPending)
+        {
+            _waveClearTimer -= dt;
+            if (_waveClearTimer <= 0f)
+            {
+                _wave++;
+                _waveClearPending = false;
+                SpawnWave();
+            }
+            // During wave-clear delay, still let the player move around
+        }
+        else if (_enemies.Count == 0)
+        {
+            _score += 500 * _wave;  // wave-clear bonus
+            _waveClearPending = true;
+            _waveClearTimer = WAVE_CLEAR_DELAY;
+        }
+
         // Handle player manual input
         KeyboardState keyboardState = Keyboard.GetState();
 
@@ -424,9 +496,23 @@ public class Game1 : Game
             }
         }
 
+        // Auto-fire: if a combat target is locked, fire toward it automatically
+        if (_playerCombatTarget != null && !_playerCombatTarget.IsDestroyed())
+        {
+            _autoFireTimer -= dt;
+            if (_autoFireTimer <= 0f)
+            {
+                _autoFireTimer = AUTO_FIRE_INTERVAL;
+                var autos = _player.FireWeaponsAtTarget(new Vector2(_playerCombatTarget.X, _playerCombatTarget.Y));
+                _projectiles.AddRange(autos);
+                foreach (var proj in autos)
+                    _particles?.CreateWeaponFireEffect(proj.X, proj.Y, proj.Angle, proj.ProjectileType);
+            }
+        }
+
         if (keyboardState.IsKeyDown(Keys.Space))
         {
-            // Fire toward combat target if one is set, otherwise fire forward
+            // Manual fire: toward combat target if set, otherwise straight ahead
             List<Projectile> projectiles;
             if (_playerCombatTarget != null && !_playerCombatTarget.IsDestroyed())
                 projectiles = _player.FireWeaponsAtTarget(new Vector2(_playerCombatTarget.X, _playerCombatTarget.Y));
@@ -446,8 +532,8 @@ public class Game1 : Game
         {
             enemy.Update(dt, _player);
 
-            // Enemy AI firing
-            if (_random.NextDouble() < 0.02)  // 2% chance per frame
+            // Enemy AI firing (~0.4 shots/sec per enemy)
+            if (_random.NextDouble() < 0.007)
             {
                 var projectiles = enemy.FireWeapons();
                 _projectiles.AddRange(projectiles);
@@ -476,11 +562,19 @@ public class Game1 : Game
                 _enemies.Remove(enemy);
                 if (_playerCombatTarget == enemy) _playerCombatTarget = null;
                 if (_selectedShip == enemy) _selectedShip = null;
+                _kills++;
+                _score += 100 * _wave;
             }
         }
 
         // Update camera: centre on player, accounting for zoom level
-        _cameraX = _player.X - Config.SCREEN_WIDTH / (2f * _cameraZoom);
+        UpdateCamera();
+    }
+
+    private void UpdateCamera()
+    {
+        if (_player == null) return;
+        _cameraX = _player.X - Config.SCREEN_WIDTH  / (2f * _cameraZoom);
         _cameraY = _player.Y - Config.SCREEN_HEIGHT / (2f * _cameraZoom);
     }
 
@@ -574,6 +668,13 @@ public class Game1 : Game
         // Draw UI without zoom transformation
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
         DrawUI();
+
+        // Full-screen overlays (drawn on top of everything)
+        if (_gameOver)
+            DrawGameOverOverlay();
+        else if (_waveClearPending)
+            DrawWaveClearOverlay();
+
         _spriteBatch.End();
 
         base.Draw(gameTime);
@@ -585,21 +686,20 @@ public class Game1 : Game
             return;
 
         const int S = 2;    // font scale
-        const int PAD = 6;
         int lh = _pixelFont.LineHeight(S);
 
         // ── Top-left status panel ───────────────────────────────────────────
         Color modeColor = _mode == Config.MODE_PLAY ? Color.Cyan : Color.Yellow;
 
         int extraRows = (_paused ? 1 : 0) + (_selectedShip != null ? 1 : 0);
-        int panelH = (5 + extraRows) * (lh + 2) + PAD * 2;
-        int panelW = 270;
+        int panelH = (6 + extraRows) * (lh + 2) + UI_PAD * 2;   // +1 row for wave/score
+        int panelW = 300;
 
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(PAD, PAD, panelW, panelH), Color.Black * 0.78f);
-        DrawRectangleBorder(PAD, PAD, panelW, panelH, modeColor * 0.6f);
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(UI_PAD, UI_PAD, panelW, panelH), Color.Black * 0.78f);
+        DrawRectangleBorder(UI_PAD, UI_PAD, panelW, panelH, modeColor * 0.6f);
 
-        int tx = PAD + PAD;
-        int ty = PAD + PAD;
+        int tx = UI_PAD + UI_PAD;
+        int ty = UI_PAD + UI_PAD;
 
         // Mode header
         _pixelFont.DrawString(_spriteBatch, _mode == Config.MODE_PLAY ? "PLAY MODE" : "BUILD MODE", tx, ty, modeColor, S);
@@ -608,7 +708,7 @@ public class Game1 : Game
         // HP bar
         int labelW = _pixelFont.MeasureWidth("HP  ", S);
         int barX = tx + labelW;
-        int barW = panelW - labelW - PAD * 2 - 4;
+        int barW = panelW - labelW - UI_PAD * 2 - 4;
         _pixelFont.DrawString(_spriteBatch, "HP ", tx, ty, Color.LightGray, S);
         float hpPct = (float)_player.TotalHealth / Math.Max(1, _player.MaxHealth);
         DrawBar(barX, ty, barW, lh - 2, hpPct, Color.Red, new Color(80, 0, 0));
@@ -638,6 +738,12 @@ public class Game1 : Game
             tx, ty, new Color(170, 170, 170), S);
         ty += lh + 2;
 
+        // Wave / score / kills
+        _pixelFont.DrawString(_spriteBatch,
+            $"WAVE {_wave}   SCORE {_score}   KILLS {_kills}",
+            tx, ty, new Color(200, 200, 100), S);
+        ty += lh + 2;
+
         if (_paused)
         {
             _pixelFont.DrawString(_spriteBatch, "** PAUSED **", tx, ty, Color.Yellow, S);
@@ -657,10 +763,10 @@ public class Game1 : Game
         {
             string tgt = $"TARGET Enemy #{_playerCombatTarget.ShipId}";
             int tw = _pixelFont.MeasureWidth(tgt, S);
-            int rx = Config.SCREEN_WIDTH - tw - PAD * 3;
-            _spriteBatch.Draw(_pixelTexture, new Rectangle(rx - PAD, PAD, tw + PAD * 2, lh + PAD), Color.Black * 0.78f);
-            DrawRectangleBorder(rx - PAD, PAD, tw + PAD * 2, lh + PAD, Color.Red * 0.6f);
-            _pixelFont.DrawString(_spriteBatch, tgt, rx, PAD + PAD / 2, Color.Red, S);
+            int rx = Config.SCREEN_WIDTH - tw - UI_PAD * 3;
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(rx - UI_PAD, UI_PAD, tw + UI_PAD * 2, lh + UI_PAD), Color.Black * 0.78f);
+            DrawRectangleBorder(rx - UI_PAD, UI_PAD, tw + UI_PAD * 2, lh + UI_PAD, Color.Red * 0.6f);
+            _pixelFont.DrawString(_spriteBatch, tgt, rx, UI_PAD + UI_PAD / 2, Color.Red, S);
         }
 
         // Top-right: autopilot label
@@ -668,22 +774,22 @@ public class Game1 : Game
         {
             string mv = "AUTOPILOT";
             int mw = _pixelFont.MeasureWidth(mv, S);
-            int rx = Config.SCREEN_WIDTH - mw - PAD * 3;
-            int ry = PAD + (_playerCombatTarget != null ? lh + PAD * 2 : 0);
-            _spriteBatch.Draw(_pixelTexture, new Rectangle(rx - PAD, ry, mw + PAD * 2, lh + PAD), Color.Black * 0.78f);
-            DrawRectangleBorder(rx - PAD, ry, mw + PAD * 2, lh + PAD, Color.Cyan * 0.6f);
-            _pixelFont.DrawString(_spriteBatch, mv, rx, ry + PAD / 2, Color.Cyan, S);
+            int rx = Config.SCREEN_WIDTH - mw - UI_PAD * 3;
+            int ry = UI_PAD + (_playerCombatTarget != null ? lh + UI_PAD * 2 : 0);
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(rx - UI_PAD, ry, mw + UI_PAD * 2, lh + UI_PAD), Color.Black * 0.78f);
+            DrawRectangleBorder(rx - UI_PAD, ry, mw + UI_PAD * 2, lh + UI_PAD, Color.Cyan * 0.6f);
+            _pixelFont.DrawString(_spriteBatch, mv, rx, ry + UI_PAD / 2, Color.Cyan, S);
         }
 
         // ── Builder panel ───────────────────────────────────────────────────
         if (_mode == Config.MODE_BUILD)
         {
-            int by = panelH + PAD * 3;
+            int by = panelH + UI_PAD * 3;
             int bpW = 500;
-            int bpH = lh * 3 + PAD * 2;
-            _spriteBatch.Draw(_pixelTexture, new Rectangle(PAD, by, bpW, bpH), Color.Black * 0.78f);
-            DrawRectangleBorder(PAD, by, bpW, bpH, Color.Yellow * 0.6f);
-            int bx = PAD + PAD; int byt = by + PAD;
+            int bpH = lh * 3 + UI_PAD * 2;
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(UI_PAD, by, bpW, bpH), Color.Black * 0.78f);
+            DrawRectangleBorder(UI_PAD, by, bpW, bpH, Color.Yellow * 0.6f);
+            int bx = UI_PAD + UI_PAD; int byt = by + UI_PAD;
             _pixelFont.DrawString(_spriteBatch, $"PLACING: {_builderSelectedType.ToUpper()}", bx, byt, Color.Yellow, S);
             byt += lh + 2;
             _pixelFont.DrawString(_spriteBatch, "1:Armor 2:Engine 3:Laser 4:Cannon 5:Reactor 6:Shield", bx, byt, Color.LightGray, S);
@@ -692,11 +798,14 @@ public class Game1 : Game
         }
 
         // ── Bottom controls bar ─────────────────────────────────────────────
-        int cbH = lh + PAD * 2;
+        int cbH = lh + UI_PAD * 2;
         _spriteBatch.Draw(_pixelTexture, new Rectangle(0, Config.SCREEN_HEIGHT - cbH, Config.SCREEN_WIDTH, cbH), Color.Black * 0.85f);
         _pixelFont.DrawString(_spriteBatch,
-            "WASD:Move  Space:Fire  LClick:Select  RClick:Target/Move  Scroll:Zoom  B:Build  P:Pause  R:Reset  ESC:Quit",
-            PAD, Config.SCREEN_HEIGHT - cbH + PAD, new Color(150, 150, 150), S);
+            "WASD:Move  Space:Fire  RClick Enemy:Lock  RClick Space:Autopilot  Scroll:Zoom  B:Build  P:Pause  R:Reset  ESC:Quit",
+            UI_PAD, Config.SCREEN_HEIGHT - cbH + UI_PAD, new Color(150, 150, 150), S);
+
+        // ── Minimap ─────────────────────────────────────────────────────────
+        DrawMinimap(cbH);
     }
 
     /// <summary>Draws overlays that live in world (zoom-transformed) space.</summary>
@@ -734,6 +843,103 @@ public class Game1 : Game
             DrawCircleOutline(tx2, ty2, 38, Color.Red * pulse);
             DrawCircleOutline(tx2, ty2, 32, Color.OrangeRed * (pulse * 0.5f));
         }
+    }
+
+    private void DrawMinimap(int controlBarH)
+    {
+        if (_player == null) return;
+
+        int mapX = Config.SCREEN_WIDTH  - MINIMAP_SIZE - UI_PAD;
+        int mapY = Config.SCREEN_HEIGHT - controlBarH  - MINIMAP_SIZE - UI_PAD;
+
+        // Background + border
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(mapX, mapY, MINIMAP_SIZE, MINIMAP_SIZE), Color.Black * 0.78f);
+        DrawRectangleBorder(mapX, mapY, MINIMAP_SIZE, MINIMAP_SIZE, Color.Gray * 0.55f);
+
+        // Label
+        _pixelFont.DrawString(_spriteBatch, "MAP", mapX + 4, mapY + 4, new Color(100, 100, 100), 1);
+
+        int cx = mapX + MINIMAP_SIZE / 2;
+        int cy = mapY + MINIMAP_SIZE / 2;
+        float scale = (MINIMAP_SIZE / 2f) / MINIMAP_WORLD_RADIUS;
+
+        // Player — green cross
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(cx - 3, cy - 1, 6, 2), Color.Lime);
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(cx - 1, cy - 3, 2, 6), Color.Lime);
+
+        // Enemies — red squares, clamped to map edge
+        foreach (var enemy in _enemies)
+        {
+            int dotX = cx + (int)((enemy.X - _player.X) * scale);
+            int dotY = cy + (int)((enemy.Y - _player.Y) * scale);
+            dotX = Math.Clamp(dotX, mapX + 3, mapX + MINIMAP_SIZE - 3);
+            dotY = Math.Clamp(dotY, mapY + 3, mapY + MINIMAP_SIZE - 3);
+
+            bool isCombatTarget = enemy == _playerCombatTarget;
+            Color dotColor = isCombatTarget ? Color.OrangeRed : Color.Red;
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(dotX - 2, dotY - 2, 4, 4), dotColor);
+        }
+    }
+
+    private void DrawGameOverOverlay()
+    {
+
+        // Dim the whole screen
+        _spriteBatch.Draw(_pixelTexture,
+            new Rectangle(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT),
+            Color.Black * 0.65f);
+
+        // Panel
+        const int W = 420; const int H = 120;
+        int px = (Config.SCREEN_WIDTH  - W) / 2;
+        int py = (Config.SCREEN_HEIGHT - H) / 2;
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(px, py, W, H), Color.Black * 0.90f);
+        DrawRectangleBorder(px, py, W, H, Color.Red * 0.8f);
+
+        const int S = 3;
+        int lh = _pixelFont.LineHeight(S);
+
+        // "GAME OVER"
+        string t1 = "GAME OVER";
+        int tw = _pixelFont.MeasureWidth(t1, S);
+        _pixelFont.DrawString(_spriteBatch, t1, px + (W - tw) / 2, py + UI_PAD, Color.Red, S);
+
+        // Stats
+        const int S2 = 2;
+        int lh2 = _pixelFont.LineHeight(S2);
+        string t2 = $"WAVE {_wave}   SCORE {_score}   KILLS {_kills}";
+        int tw2 = _pixelFont.MeasureWidth(t2, S2);
+        _pixelFont.DrawString(_spriteBatch, t2, px + (W - tw2) / 2, py + UI_PAD + lh + 4, Color.White, S2);
+
+        string t3 = "Press R to restart";
+        int tw3 = _pixelFont.MeasureWidth(t3, S2);
+        float blink = (MathF.Sin(_gameTime * 4f) + 1f) / 2f;
+        _pixelFont.DrawString(_spriteBatch, t3, px + (W - tw3) / 2, py + UI_PAD + lh + 4 + lh2 + 4, Color.Yellow * (0.5f + blink * 0.5f), S2);
+    }
+
+    private void DrawWaveClearOverlay()
+    {
+        // Fade out as the timer counts down
+        float fade = Math.Clamp(_waveClearTimer / WAVE_CLEAR_DELAY, 0f, 1f);
+        if (fade <= 0f) return;
+
+        const int W = 400; const int H = 90;
+        int px = (Config.SCREEN_WIDTH  - W) / 2;
+        int py = (Config.SCREEN_HEIGHT - H) / 3;
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(px, py, W, H), Color.Black * (0.85f * fade));
+        DrawRectangleBorder(px, py, W, H, Color.Yellow * (0.8f * fade));
+
+        const int S = 3;
+        int lh = _pixelFont.LineHeight(S);
+
+        string t1 = $"WAVE {_wave} COMPLETE!";
+        int tw1 = _pixelFont.MeasureWidth(t1, S);
+        _pixelFont.DrawString(_spriteBatch, t1, px + (W - tw1) / 2, py + UI_PAD, Color.Yellow * fade, S);
+
+        const int S2 = 2;
+        string t2 = $"+{500 * _wave} BONUS  NEXT: WAVE {_wave + 1}  ({2 + _wave + 1} enemies)";
+        int tw2 = _pixelFont.MeasureWidth(t2, S2);
+        _pixelFont.DrawString(_spriteBatch, t2, px + (W - tw2) / 2, py + UI_PAD + lh + 4, Color.Cyan * fade, S2);
     }
 
     private void DrawBar(int x, int y, int width, int height, float fillPercent, Color fillColor, Color bgColor)
