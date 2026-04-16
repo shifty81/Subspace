@@ -38,6 +38,9 @@ public class Ship
     // Optional pre-rendered sprite for enemies (overrides component-based rendering)
     public Texture2D? PrerenderedTexture { get; set; }
 
+    // Cached render target for ship surface (reused across frames)
+    private RenderTarget2D? _shipSurface;
+
     public Ship(float x, float y, int shipId, bool isPlayer = false)
     {
         X = x;
@@ -415,7 +418,7 @@ public class Ship
         );
     }
 
-    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, RenderTarget2D? shipSurface, float cameraX, float cameraY, GraphicsDevice graphicsDevice, Dictionary<string, Texture2D>? componentTextures = null)
+    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, float cameraX, float cameraY, GraphicsDevice graphicsDevice, float zoom, Dictionary<string, Texture2D>? componentTextures = null)
     {
         int screenX = (int)(X - cameraX);
         int screenY = (int)(Y - cameraY);
@@ -441,14 +444,19 @@ public class Ship
         int shipWidth = GridWidth * Config.GRID_SIZE;
         int shipHeight = GridHeight * Config.GRID_SIZE;
 
-        if (shipSurface == null)
-            shipSurface = new RenderTarget2D(graphicsDevice, shipWidth, shipHeight);
+        // Reuse or (re)create the cached render target
+        if (_shipSurface == null || _shipSurface.IsDisposed ||
+            _shipSurface.Width != shipWidth || _shipSurface.Height != shipHeight)
+        {
+            _shipSurface?.Dispose();
+            _shipSurface = new RenderTarget2D(graphicsDevice, shipWidth, shipHeight);
+        }
 
         // End the current spriteBatch before changing render targets
         spriteBatch.End();
 
-        // Render components on temporary surface
-        graphicsDevice.SetRenderTarget(shipSurface);
+        // Render components onto the ship surface
+        graphicsDevice.SetRenderTarget(_shipSurface);
         graphicsDevice.Clear(Color.Transparent);
 
         spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
@@ -460,15 +468,17 @@ public class Ship
         }
         spriteBatch.End();
 
-        // Reset render target
+        // Restore main render target
         graphicsDevice.SetRenderTarget(null);
 
-        // Restart spriteBatch for drawing to main surface
-        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
+        // Restart the world spriteBatch with the correct zoom transform so subsequent
+        // draws (other ships, projectiles, indicators) are all properly scaled.
+        Matrix worldTransform = Matrix.CreateScale(zoom);
+        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, null, null, null, null, worldTransform);
 
-        // Draw rotated ship on main surface
+        // Draw rotated ship onto the main surface
         spriteBatch.Draw(
-            shipSurface,
+            _shipSurface,
             new Vector2(screenX, screenY),
             null,
             Color.White,
@@ -478,8 +488,8 @@ public class Ship
             SpriteEffects.None,
             0
         );
-        
-        // Draw crew members on top of ship
+
+        // Draw crew members on top of the ship
         CrewManager?.Render(spriteBatch, pixelTexture, cameraX, cameraY);
     }
 }

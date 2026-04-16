@@ -45,8 +45,11 @@ public class Game1 : Game
 
     // Mouse control state
     private Ship? _selectedShip = null;
-    private bool _mouseTargetingMode = false;
-    private Vector2? _mouseTargetPosition = null;
+    private Vector2? _playerMoveTarget = null;
+    private Ship? _playerCombatTarget = null;
+
+    // UI
+    private PixelFont _pixelFont = null!;
 
     // Input state
     private KeyboardState _previousKeyboardState;
@@ -117,6 +120,7 @@ public class Game1 : Game
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
+        _pixelFont = new PixelFont(_pixelTexture);
         
         // Load component textures
         try
@@ -218,9 +222,7 @@ public class Game1 : Game
             _cameraZoom = Math.Clamp(_cameraZoom, 0.5f, 3.0f);
         }
 
-        // Toggle targeting mode with T key
-        if (keyboardState.IsKeyDown(Keys.T) && !_previousKeyboardState.IsKeyDown(Keys.T))
-            _mouseTargetingMode = !_mouseTargetingMode;
+        // Toggle targeting mode with T key — removed; right-click sets targets directly
 
         // Builder controls
         if (_mode == Config.MODE_BUILD)
@@ -254,19 +256,10 @@ public class Game1 : Game
         }
         else if (_mode == Config.MODE_PLAY)
         {
-            // Handle mouse clicks in play mode
             if (mouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released)
                 HandlePlayModeClick(mouseState.Position, true);
             else if (mouseState.RightButton == ButtonState.Pressed && _previousMouseState.RightButton == ButtonState.Released)
                 HandlePlayModeClick(mouseState.Position, false);
-            
-            // Update mouse target position for weapon aiming
-            if (_mouseTargetingMode)
-            {
-                float worldX = (mouseState.Position.X / _cameraZoom) + _cameraX;
-                float worldY = (mouseState.Position.Y / _cameraZoom) + _cameraY;
-                _mouseTargetPosition = new Vector2(worldX, worldY);
-            }
         }
 
         _previousKeyboardState = keyboardState;
@@ -325,7 +318,6 @@ public class Game1 : Game
             // Select ship at clicked position
             _selectedShip = null;
 
-            // Check if clicking on player ship
             var playerBounds = _player.GetBounds();
             if (playerBounds.Contains(new Point((int)worldX, (int)worldY)))
             {
@@ -333,7 +325,6 @@ public class Game1 : Game
                 return;
             }
 
-            // Check if clicking on enemy ship
             foreach (var enemy in _enemies)
             {
                 var enemyBounds = enemy.GetBounds();
@@ -346,12 +337,22 @@ public class Game1 : Game
         }
         else
         {
-            // Right click - set target for selected ship or enable targeting mode
-            if (_selectedShip != null && _selectedShip.IsPlayer)
+            // Right click: if an enemy is under the cursor set it as combat target;
+            // otherwise send the player ship to that world position (autopilot).
+            foreach (var enemy in _enemies)
             {
-                _mouseTargetingMode = true;
-                _mouseTargetPosition = new Vector2(worldX, worldY);
+                var enemyBounds = enemy.GetBounds();
+                if (enemyBounds.Contains(new Point((int)worldX, (int)worldY)))
+                {
+                    _playerCombatTarget = enemy;
+                    _playerMoveTarget = null;
+                    return;
+                }
             }
+
+            // No enemy hit — set autopilot move target
+            _playerMoveTarget = new Vector2(worldX, worldY);
+            _playerCombatTarget = null;
         }
     }
 
@@ -369,13 +370,22 @@ public class Game1 : Game
         if (_player == null)
             return;
 
-        // Handle player input
+        // Handle player manual input
         KeyboardState keyboardState = Keyboard.GetState();
+
+        bool manualControl =
+            keyboardState.IsKeyDown(Keys.W) || keyboardState.IsKeyDown(Keys.Up) ||
+            keyboardState.IsKeyDown(Keys.S) || keyboardState.IsKeyDown(Keys.Down) ||
+            keyboardState.IsKeyDown(Keys.A) || keyboardState.IsKeyDown(Keys.Left) ||
+            keyboardState.IsKeyDown(Keys.D) || keyboardState.IsKeyDown(Keys.Right);
+
+        // Manual keys cancel autopilot
+        if (manualControl)
+            _playerMoveTarget = null;
 
         if (keyboardState.IsKeyDown(Keys.W) || keyboardState.IsKeyDown(Keys.Up))
             _player.ApplyThrust(dt, _particles);
 
-        // Add reverse thrust with S key
         if (keyboardState.IsKeyDown(Keys.S) || keyboardState.IsKeyDown(Keys.Down))
             _player.ApplyReverseThrust(dt, _particles);
 
@@ -385,14 +395,41 @@ public class Game1 : Game
         if (keyboardState.IsKeyDown(Keys.D) || keyboardState.IsKeyDown(Keys.Right))
             _player.Rotate(1, dt);
 
+        // Autopilot: steer and thrust toward the move target
+        if (_playerMoveTarget.HasValue)
+        {
+            float dx = _playerMoveTarget.Value.X - _player.X;
+            float dy = _playerMoveTarget.Value.Y - _player.Y;
+            float dist = MathF.Sqrt(dx * dx + dy * dy);
+
+            if (dist < 30f)
+            {
+                _playerMoveTarget = null;
+            }
+            else
+            {
+                float targetAngle = MathF.Atan2(dy, dx);
+                float angleDiff = targetAngle - _player.Angle;
+                while (angleDiff > MathF.PI) angleDiff -= 2 * MathF.PI;
+                while (angleDiff < -MathF.PI) angleDiff += 2 * MathF.PI;
+
+                if (MathF.Abs(angleDiff) > 0.15f)
+                    _player.Rotate(angleDiff > 0 ? 1 : -1, dt);
+                else
+                    _player.ApplyThrust(dt, _particles);
+            }
+        }
+
         if (keyboardState.IsKeyDown(Keys.Space))
         {
-            // Fire weapons with mouse targeting if enabled
-            var projectiles = _mouseTargetingMode && _mouseTargetPosition.HasValue
-                ? _player.FireWeaponsAtTarget(_mouseTargetPosition.Value)
-                : _player.FireWeapons();
+            // Fire toward combat target if one is set, otherwise fire forward
+            List<Projectile> projectiles;
+            if (_playerCombatTarget != null && !_playerCombatTarget.IsDestroyed())
+                projectiles = _player.FireWeaponsAtTarget(new Vector2(_playerCombatTarget.X, _playerCombatTarget.Y));
+            else
+                projectiles = _player.FireWeapons();
+
             _projectiles.AddRange(projectiles);
-            // Create muzzle flash particles
             foreach (var proj in projectiles)
                 _particles?.CreateWeaponFireEffect(proj.X, proj.Y, proj.Angle, proj.ProjectileType);
         }
@@ -426,19 +463,21 @@ public class Game1 : Game
         // Check collisions
         CheckCollisions();
 
-        // Remove destroyed enemies
+        // Remove destroyed enemies; clear stale references
         foreach (var enemy in _enemies.ToList())
         {
             if (enemy.IsDestroyed())
             {
                 _particles?.CreateExplosion(enemy.X, enemy.Y, "large");
                 _enemies.Remove(enemy);
+                if (_playerCombatTarget == enemy) _playerCombatTarget = null;
+                if (_selectedShip == enemy) _selectedShip = null;
             }
         }
 
-        // Update camera to follow player
-        _cameraX = _player.X - Config.SCREEN_WIDTH / 2f;
-        _cameraY = _player.Y - Config.SCREEN_HEIGHT / 2f;
+        // Update camera: centre on player, accounting for zoom level
+        _cameraX = _player.X - Config.SCREEN_WIDTH / (2f * _cameraZoom);
+        _cameraY = _player.Y - Config.SCREEN_HEIGHT / (2f * _cameraZoom);
     }
 
     private void CheckCollisions()
@@ -502,7 +541,7 @@ public class Game1 : Game
         // Draw player
         if (_player != null)
         {
-            _player.Render(_spriteBatch, _pixelTexture, null, _cameraX, _cameraY, GraphicsDevice, _componentTextures);
+            _player.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, GraphicsDevice, _cameraZoom, _componentTextures);
             
             // Draw selection indicator if selected
             if (_selectedShip == _player)
@@ -512,7 +551,7 @@ public class Game1 : Game
         // Draw enemies
         foreach (var enemy in _enemies)
         {
-            enemy.Render(_spriteBatch, _pixelTexture, null, _cameraX, _cameraY, GraphicsDevice, _componentTextures);
+            enemy.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY, GraphicsDevice, _cameraZoom, _componentTextures);
             
             // Draw selection indicator if selected
             if (_selectedShip == enemy)
@@ -523,9 +562,8 @@ public class Game1 : Game
         foreach (var proj in _projectiles)
             proj.Render(_spriteBatch, _pixelTexture, _cameraX, _cameraY);
 
-        // Draw mouse targeting reticle
-        if (_mouseTargetingMode && _mouseTargetPosition.HasValue)
-            DrawTargetingReticle(_mouseTargetPosition.Value);
+        // Draw world-space UI overlays (health bars, move/combat target indicators)
+        DrawWorldSpaceUI();
 
         _spriteBatch.End();
 
@@ -539,61 +577,159 @@ public class Game1 : Game
 
     private void DrawUI()
     {
-        // Draw basic UI elements with better visibility
         if (_player == null)
             return;
 
-        // Draw semi-transparent background panels for UI
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(5, 5, 400, 160), Color.Black * 0.7f);
+        const int S = 2;    // font scale
+        const int PAD = 6;
+        int lh = _pixelFont.LineHeight(S);
 
-        // Mode indicator
-        string modeText = _mode == Config.MODE_PLAY ? "PLAY MODE" : "BUILD MODE";
-        DrawText(modeText, 10, 10, Color.White, large: true);
+        // ── Top-left status panel ───────────────────────────────────────────
+        Color modeColor = _mode == Config.MODE_PLAY ? Color.Cyan : Color.Yellow;
+
+        int extraRows = (_paused ? 1 : 0) + (_selectedShip != null ? 1 : 0);
+        int panelH = (5 + extraRows) * (lh + 2) + PAD * 2;
+        int panelW = 270;
+
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(PAD, PAD, panelW, panelH), Color.Black * 0.78f);
+        DrawRectangleBorder(PAD, PAD, panelW, panelH, modeColor * 0.6f);
+
+        int tx = PAD + PAD;
+        int ty = PAD + PAD;
+
+        // Mode header
+        _pixelFont.DrawString(_spriteBatch, _mode == Config.MODE_PLAY ? "PLAY MODE" : "BUILD MODE", tx, ty, modeColor, S);
+        ty += lh + 2;
+
+        // HP bar
+        int labelW = _pixelFont.MeasureWidth("HP  ", S);
+        int barX = tx + labelW;
+        int barW = panelW - labelW - PAD * 2 - 4;
+        _pixelFont.DrawString(_spriteBatch, "HP ", tx, ty, Color.LightGray, S);
+        float hpPct = (float)_player.TotalHealth / Math.Max(1, _player.MaxHealth);
+        DrawBar(barX, ty, barW, lh - 2, hpPct, Color.Red, new Color(80, 0, 0));
+        _pixelFont.DrawString(_spriteBatch, $"{_player.TotalHealth}/{_player.MaxHealth}", barX + 2, ty, Color.White, S);
+        ty += lh + 2;
+
+        // Power bar
+        int freePwr = _player.PowerAvailable - _player.PowerUsed;
+        _pixelFont.DrawString(_spriteBatch, "PWR", tx, ty, Color.LightGray, S);
+        float pwrPct = (float)Math.Max(0, freePwr) / Math.Max(1, _player.PowerAvailable);
+        DrawBar(barX, ty, barW, lh - 2, pwrPct, new Color(0, 210, 255), new Color(0, 50, 80));
+        _pixelFont.DrawString(_spriteBatch, $"{freePwr}/{_player.PowerAvailable}", barX + 2, ty, Color.White, S);
+        ty += lh + 2;
+
+        // Speed bar
+        float spd = MathF.Sqrt(_player.VX * _player.VX + _player.VY * _player.VY);
+        _pixelFont.DrawString(_spriteBatch, "SPD", tx, ty, Color.LightGray, S);
+        DrawBar(barX, ty, barW, lh - 2, spd / Config.MAX_VELOCITY, new Color(80, 220, 80), new Color(10, 50, 10));
+        _pixelFont.DrawString(_spriteBatch, $"{(int)spd}", barX + 2, ty, Color.White, S);
+        ty += lh + 2;
+
+        // Crew / zoom / enemy count
+        int wk = _player.CrewManager?.GetWorkingCrew() ?? 0;
+        int tot = _player.CrewManager?.GetTotalCrew() ?? 0;
+        _pixelFont.DrawString(_spriteBatch,
+            $"CREW {wk}/{tot}  ZOOM {_cameraZoom:F1}x  {_enemies.Count} enemy",
+            tx, ty, new Color(170, 170, 170), S);
+        ty += lh + 2;
 
         if (_paused)
         {
-            _spriteBatch.Draw(_pixelTexture, new Rectangle(Config.SCREEN_WIDTH / 2 - 80, 5, 160, 30), Color.Black * 0.7f);
-            DrawText("PAUSED", Config.SCREEN_WIDTH / 2 - 40, 10, Color.Yellow, large: true);
+            _pixelFont.DrawString(_spriteBatch, "** PAUSED **", tx, ty, Color.Yellow, S);
+            ty += lh + 2;
         }
 
-        // Player stats with bars
-        DrawText($"Health: {_player.TotalHealth}/{_player.MaxHealth}", 10, 40, Color.White);
-        DrawBar(150, 42, 200, 12, (float)_player.TotalHealth / _player.MaxHealth, Color.Red, Color.DarkRed);
-
-        DrawText($"Power: {_player.PowerAvailable - _player.PowerUsed}/{_player.PowerAvailable}", 10, 60, Color.White);
-        DrawBar(150, 62, 200, 12, (float)(Math.Max(0, _player.PowerAvailable - _player.PowerUsed)) / Math.Max(1, _player.PowerAvailable), Color.Cyan, Color.DarkCyan);
-
-        DrawText($"Crew: {_player.CrewManager?.GetWorkingCrew()}/{_player.CrewManager?.GetTotalCrew()} Working", 10, 80, Color.White);
-
-        // Zoom level indicator
-        DrawText($"Zoom: {_cameraZoom:F1}x (Mouse Wheel)", 10, 100, Color.Gray);
-
-        // Mouse targeting mode indicator
-        if (_mouseTargetingMode)
-            DrawText("TARGETING MODE (T to toggle)", 10, 120, Color.Orange);
-
-        // Selected ship info
         if (_selectedShip != null)
         {
-            string shipName = _selectedShip.IsPlayer ? "Your Ship" : $"Enemy Ship #{_selectedShip.ShipId}";
-            DrawText($"Selected: {shipName}", 10, 140, Color.Yellow);
+            string sname = _selectedShip.IsPlayer ? "Your Ship" : $"Enemy #{_selectedShip.ShipId}";
+            _pixelFont.DrawString(_spriteBatch,
+                $"SEL: {sname}  HP:{_selectedShip.TotalHealth}/{_selectedShip.MaxHealth}",
+                tx, ty, Color.Yellow, S);
         }
 
-        // Builder mode UI
+        // ── Top-right: combat target label ─────────────────────────────────
+        if (_playerCombatTarget != null)
+        {
+            string tgt = $"TARGET Enemy #{_playerCombatTarget.ShipId}";
+            int tw = _pixelFont.MeasureWidth(tgt, S);
+            int rx = Config.SCREEN_WIDTH - tw - PAD * 3;
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(rx - PAD, PAD, tw + PAD * 2, lh + PAD), Color.Black * 0.78f);
+            DrawRectangleBorder(rx - PAD, PAD, tw + PAD * 2, lh + PAD, Color.Red * 0.6f);
+            _pixelFont.DrawString(_spriteBatch, tgt, rx, PAD + PAD / 2, Color.Red, S);
+        }
+
+        // Top-right: autopilot label
+        if (_playerMoveTarget.HasValue)
+        {
+            string mv = "AUTOPILOT";
+            int mw = _pixelFont.MeasureWidth(mv, S);
+            int rx = Config.SCREEN_WIDTH - mw - PAD * 3;
+            int ry = PAD + (_playerCombatTarget != null ? lh + PAD * 2 : 0);
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(rx - PAD, ry, mw + PAD * 2, lh + PAD), Color.Black * 0.78f);
+            DrawRectangleBorder(rx - PAD, ry, mw + PAD * 2, lh + PAD, Color.Cyan * 0.6f);
+            _pixelFont.DrawString(_spriteBatch, mv, rx, ry + PAD / 2, Color.Cyan, S);
+        }
+
+        // ── Builder panel ───────────────────────────────────────────────────
         if (_mode == Config.MODE_BUILD)
         {
-            _spriteBatch.Draw(_pixelTexture, new Rectangle(5, 170, 600, 60), Color.Black * 0.7f);
-            DrawText("Selected: " + _builderSelectedType, 10, 175, Color.Yellow);
-            DrawText("1-9,0: Select component | Left Click: Add | Right Click: Remove", 10, 195, Color.White);
-            DrawText("7:Quarters 8:Ammo 9:Corridor 0:Structure", 10, 210, Color.Gray);
+            int by = panelH + PAD * 3;
+            int bpW = 500;
+            int bpH = lh * 3 + PAD * 2;
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(PAD, by, bpW, bpH), Color.Black * 0.78f);
+            DrawRectangleBorder(PAD, by, bpW, bpH, Color.Yellow * 0.6f);
+            int bx = PAD + PAD; int byt = by + PAD;
+            _pixelFont.DrawString(_spriteBatch, $"PLACING: {_builderSelectedType.ToUpper()}", bx, byt, Color.Yellow, S);
+            byt += lh + 2;
+            _pixelFont.DrawString(_spriteBatch, "1:Armor 2:Engine 3:Laser 4:Cannon 5:Reactor 6:Shield", bx, byt, Color.LightGray, S);
+            byt += lh + 2;
+            _pixelFont.DrawString(_spriteBatch, "7:Crew 8:Ammo 9:Corridor 0:Structure  [L:Place  R:Remove]", bx, byt, Color.Gray, S);
         }
 
-        // Controls at bottom
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(5, Config.SCREEN_HEIGHT - 55, Config.SCREEN_WIDTH - 10, 50), Color.Black * 0.7f);
-        DrawText("WASD/Arrows: Move/Rotate | S: Reverse | Space: Fire | T: Target Mode", 
-            10, Config.SCREEN_HEIGHT - 50, Color.Gray);
-        DrawText("Mouse: Click ships to select | Right-click: Target | Wheel: Zoom | B: Build | P: Pause | R: Reset | ESC: Exit", 
-            10, Config.SCREEN_HEIGHT - 30, Color.Gray);
+        // ── Bottom controls bar ─────────────────────────────────────────────
+        int cbH = lh + PAD * 2;
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(0, Config.SCREEN_HEIGHT - cbH, Config.SCREEN_WIDTH, cbH), Color.Black * 0.85f);
+        _pixelFont.DrawString(_spriteBatch,
+            "WASD:Move  Space:Fire  LClick:Select  RClick:Target/Move  Scroll:Zoom  B:Build  P:Pause  R:Reset  ESC:Quit",
+            PAD, Config.SCREEN_HEIGHT - cbH + PAD, new Color(150, 150, 150), S);
+    }
+
+    /// <summary>Draws overlays that live in world (zoom-transformed) space.</summary>
+    private void DrawWorldSpaceUI()
+    {
+        // Enemy health bars above each enemy ship
+        foreach (var enemy in _enemies)
+        {
+            var bounds = enemy.GetBounds();
+            int sx = (int)(bounds.X - _cameraX);
+            int sy = (int)(bounds.Y - _cameraY) - 8;
+            int bw = Math.Max(10, bounds.Width);
+            if (enemy.MaxHealth > 0)
+                DrawBar(sx, sy, bw, 4, (float)enemy.TotalHealth / enemy.MaxHealth, Color.Red, new Color(80, 0, 0));
+        }
+
+        // Autopilot move-target indicator
+        if (_playerMoveTarget.HasValue && _player != null)
+        {
+            int px = (int)(_player.X - _cameraX);
+            int py = (int)(_player.Y - _cameraY);
+            int tx2 = (int)(_playerMoveTarget.Value.X - _cameraX);
+            int ty2 = (int)(_playerMoveTarget.Value.Y - _cameraY);
+            DrawLine(px, py, tx2, ty2, Color.Cyan * 0.35f);
+            float pulse = MathF.Sin(_gameTime * 4f) * 0.3f + 0.7f;
+            DrawCircleOutline(tx2, ty2, 14, Color.Cyan * pulse);
+        }
+
+        // Combat-target ring
+        if (_playerCombatTarget != null)
+        {
+            int tx2 = (int)(_playerCombatTarget.X - _cameraX);
+            int ty2 = (int)(_playerCombatTarget.Y - _cameraY);
+            float pulse = MathF.Sin(_gameTime * 6f) * 0.3f + 0.7f;
+            DrawCircleOutline(tx2, ty2, 38, Color.Red * pulse);
+            DrawCircleOutline(tx2, ty2, 32, Color.OrangeRed * (pulse * 0.5f));
+        }
     }
 
     private void DrawBar(int x, int y, int width, int height, float fillPercent, Color fillColor, Color bgColor)
@@ -616,20 +752,6 @@ public class Game1 : Game
         _spriteBatch.Draw(_pixelTexture, new Rectangle(x, y + height - 1, width, 1), color); // Bottom
         _spriteBatch.Draw(_pixelTexture, new Rectangle(x, y, 1, height), color); // Left
         _spriteBatch.Draw(_pixelTexture, new Rectangle(x + width - 1, y, 1, height), color); // Right
-    }
-
-    private void DrawText(string text, int x, int y, Color color, bool large = false)
-    {
-        // Simple pixel-based text drawing with better visibility
-        int charWidth = large ? 10 : 8;
-        int charHeight = large ? 20 : 16;
-        
-        // Draw text shadow for better readability
-        int width = text.Length * charWidth;
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(x + 1, y + 1, width, charHeight), Color.Black * 0.5f);
-        
-        // Draw text background
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(x, y, width, charHeight), color * 0.4f);
     }
 
     private void DrawSelectionIndicator(Ship ship)
@@ -663,34 +785,6 @@ public class Game1 : Game
         // Bottom-right
         _spriteBatch.Draw(_pixelTexture, new Rectangle(screenX + width - bracketSize + 5, screenY + height + 2, bracketSize, thickness), selectionColor);
         _spriteBatch.Draw(_pixelTexture, new Rectangle(screenX + width + 2, screenY + height - bracketSize + 5, thickness, bracketSize), selectionColor);
-    }
-
-    private void DrawTargetingReticle(Vector2 worldPosition)
-    {
-        int screenX = (int)((worldPosition.X - _cameraX));
-        int screenY = (int)((worldPosition.Y - _cameraY));
-
-        // Draw crosshair
-        int size = 20;
-        int gap = 8;
-        int thickness = 2;
-
-        Color reticleColor = Color.Red * 0.8f;
-
-        // Horizontal lines
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(screenX - size, screenY - thickness / 2, size - gap, thickness), reticleColor);
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(screenX + gap, screenY - thickness / 2, size - gap, thickness), reticleColor);
-
-        // Vertical lines
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(screenX - thickness / 2, screenY - size, thickness, size - gap), reticleColor);
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(screenX - thickness / 2, screenY + gap, thickness, size - gap), reticleColor);
-
-        // Center dot
-        _spriteBatch.Draw(_pixelTexture, new Rectangle(screenX - 2, screenY - 2, 4, 4), Color.Red);
-
-        // Outer circle
-        float pulse = (float)Math.Sin(_gameTime * 6) * 0.2f + 0.8f;
-        DrawCircleOutline(screenX, screenY, 30, Color.Red * pulse);
     }
 
     private void DrawCircleOutline(int centerX, int centerY, int radius, Color color)
