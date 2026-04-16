@@ -24,9 +24,12 @@ public static class Config
     public static readonly Color ORANGE = Color.Orange;
     public static readonly Color CYAN = Color.Cyan;
 
-    // Grid settings (for ship building)
+    // Grid settings (for ship building — exterior/space view)
     public const int GRID_SIZE = 32;
     public static readonly Color GRID_COLOR = new Color(40, 40, 40);
+
+    // Interior grid (ship interior scene — 96 px per cell)
+    public const int INTERIOR_GRID_SIZE = 96;
 
     // Physics
     public const float MAX_VELOCITY = 300f;
