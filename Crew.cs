@@ -22,7 +22,6 @@ public class CrewMember
 
     // Path finding
     private List<Point> currentPath = new List<Point>();
-    private int pathIndex = 0;
     private const float MOVE_SPEED_CORRIDOR = 100f; // pixels per second in corridors
     private const float MOVE_SPEED_ROOM = 50f; // pixels per second in rooms
 

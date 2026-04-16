@@ -6,6 +6,12 @@ using System.Linq;
 
 namespace Subspace;
 
+/// <summary>Enemy archetype that determines starting layout and stats.</summary>
+public enum EnemyType { Scout, Gunship, Support }
+
+/// <summary>Per-weapon-type readiness summary for the HUD. Ready = 1.0, just fired = 0.0. Count = -1 means no weapons of that type.</summary>
+public record struct WeaponSummary(int LaserCount, float LaserReady, int CannonCount, float CannonReady, int MissileCount, float MissileReady);
+
 /// <summary>
 /// A spaceship made of modular components
 /// </summary>
@@ -29,21 +35,40 @@ public class Ship
     public int PowerAvailable { get; private set; }
     public int PowerUsed { get; private set; }
     public float TotalThrust { get; private set; }
-    
+
     public CrewManager? CrewManager { get; private set; }
 
     public Ship? Target { get; set; }
     public string AIState { get; set; } = "idle";
 
+    // Enemy type (only meaningful for non-player ships)
+    public EnemyType EnemyType { get; private set; }
+
     // Optional pre-rendered sprite for enemies (overrides component-based rendering)
     public Texture2D? PrerenderedTexture { get; set; }
 
-    public Ship(float x, float y, int shipId, bool isPlayer = false)
+    // Cached render target for ship surface (reused across frames)
+    private RenderTarget2D? _shipSurface;
+
+    // Shield / damage state
+    /// <summary>Set to true for one frame whenever a hit is absorbed by shields.</summary>
+    public bool LastHitWasShielded { get; private set; }
+    private float _damageCooldown = 0f;
+    private const float DAMAGE_COOLDOWN_DURATION = 2.0f;
+    private const float SHIELD_REGEN_RATE = 3f;  // HP per second per shield component
+
+    // AI strafing
+    private int _strafeDirection = 1;
+    private float _strafeTimer = 0f;
+    private const float STRAFE_SWITCH_INTERVAL = 2.5f;
+
+    public Ship(float x, float y, int shipId, bool isPlayer = false, EnemyType enemyType = EnemyType.Scout)
     {
         X = x;
         Y = y;
         ShipId = shipId;
         IsPlayer = isPlayer;
+        EnemyType = enemyType;
         Angle = 0f;
         VX = 0f;
         VY = 0f;
@@ -53,7 +78,7 @@ public class Ship
         if (isPlayer)
             CreatePlayerShip();
         else
-            CreateEnemyShip();
+            CreateEnemyShip(enemyType);
 
         RecalculateStats();
         
@@ -73,10 +98,11 @@ public class Ship
         Components.Add(new Component(ComponentType.ENGINE, 4, 6));
         Components.Add(new Component(ComponentType.ENGINE, 4, 7));
 
-        // Weapons
+        // Weapons (lasers + cannon + a single missile bay)
         Components.Add(new Component(ComponentType.WEAPON_LASER, 3, 3));
         Components.Add(new Component(ComponentType.WEAPON_LASER, 5, 3));
         Components.Add(new Component(ComponentType.WEAPON_CANNON, 4, 2));
+        Components.Add(new Component(ComponentType.WEAPON_MISSILE, 4, 3));
 
         // Power
         Components.Add(new Component(ComponentType.POWER, 3, 5));
@@ -88,14 +114,54 @@ public class Ship
         Components.Add(new Component(ComponentType.ARMOR, 4, 5));
     }
 
-    private void CreateEnemyShip()
+    private void CreateEnemyShip(EnemyType type = EnemyType.Scout)
     {
-        // Smaller, simpler enemy ship
+        switch (type)
+        {
+            case EnemyType.Gunship: CreateGunship(); break;
+            case EnemyType.Support: CreateSupport(); break;
+            default:                CreateScout();   break;
+        }
+    }
+
+    /// <summary>Fast, lightly-armed interceptor — 3 engines, single laser.</summary>
+    private void CreateScout()
+    {
+        Components.Add(new Component(ComponentType.CORE, 4, 4));
+        Components.Add(new Component(ComponentType.ENGINE, 3, 6));
+        Components.Add(new Component(ComponentType.ENGINE, 5, 6));
+        Components.Add(new Component(ComponentType.ENGINE, 4, 7));
+        Components.Add(new Component(ComponentType.WEAPON_LASER, 4, 3));
+        Components.Add(new Component(ComponentType.POWER, 4, 5));
+    }
+
+    /// <summary>Heavily armoured with dual cannons — slow but lethal.</summary>
+    private void CreateGunship()
+    {
+        Components.Add(new Component(ComponentType.CORE, 4, 4));
+        Components.Add(new Component(ComponentType.ENGINE, 4, 7));
+        Components.Add(new Component(ComponentType.WEAPON_CANNON, 3, 2));
+        Components.Add(new Component(ComponentType.WEAPON_CANNON, 5, 2));
+        Components.Add(new Component(ComponentType.WEAPON_LASER, 4, 3));
+        Components.Add(new Component(ComponentType.POWER, 3, 5));
+        Components.Add(new Component(ComponentType.POWER, 5, 5));
+        Components.Add(new Component(ComponentType.ARMOR, 3, 3));
+        Components.Add(new Component(ComponentType.ARMOR, 5, 3));
+        Components.Add(new Component(ComponentType.ARMOR, 3, 4));
+        Components.Add(new Component(ComponentType.ARMOR, 5, 4));
+    }
+
+    /// <summary>Shield-heavy support vessel — resilient but offensively modest.</summary>
+    private void CreateSupport()
+    {
         Components.Add(new Component(ComponentType.CORE, 4, 4));
         Components.Add(new Component(ComponentType.ENGINE, 4, 6));
         Components.Add(new Component(ComponentType.WEAPON_LASER, 4, 3));
         Components.Add(new Component(ComponentType.POWER, 3, 4));
-        Components.Add(new Component(ComponentType.ARMOR, 5, 4));
+        Components.Add(new Component(ComponentType.POWER, 5, 4));
+        Components.Add(new Component(ComponentType.SHIELD, 3, 3));
+        Components.Add(new Component(ComponentType.SHIELD, 5, 3));
+        Components.Add(new Component(ComponentType.SHIELD, 4, 5));
     }
 
     private void RecalculateStats()
@@ -116,6 +182,28 @@ public class Ship
         }
     }
 
+    /// <summary>
+    /// Returns weapon readiness for the HUD.
+    /// Ready value of 1.0 = fully charged, 0.0 = just fired.
+    /// Count of -1 means no weapons of that type are alive.
+    /// </summary>
+    public WeaponSummary GetWeaponSummary()
+    {
+        const float LASER_MAX_CD   = 0.5f;
+        const float CANNON_MAX_CD  = 1.5f;
+        const float MISSILE_MAX_CD = 3.0f;
+
+        var lasers   = Components.Where(c => c.ComponentType == ComponentType.WEAPON_LASER   && c.Stats.Health > 0).ToList();
+        var cannons  = Components.Where(c => c.ComponentType == ComponentType.WEAPON_CANNON  && c.Stats.Health > 0).ToList();
+        var missiles = Components.Where(c => c.ComponentType == ComponentType.WEAPON_MISSILE && c.Stats.Health > 0).ToList();
+
+        float laserReady   = lasers.Count   > 0 ? (float)lasers.Average(c   => Math.Clamp(1f - c.Cooldown / LASER_MAX_CD,   0f, 1f)) : -1f;
+        float cannonReady  = cannons.Count  > 0 ? (float)cannons.Average(c  => Math.Clamp(1f - c.Cooldown / CANNON_MAX_CD,  0f, 1f)) : -1f;
+        float missileReady = missiles.Count > 0 ? (float)missiles.Average(c => Math.Clamp(1f - c.Cooldown / MISSILE_MAX_CD, 0f, 1f)) : -1f;
+
+        return new WeaponSummary(lasers.Count, laserReady, cannons.Count, cannonReady, missiles.Count, missileReady);
+    }
+
     public void AddComponent(Component component)
     {
         Components.Add(component);
@@ -133,8 +221,11 @@ public class Ship
         return Components.FirstOrDefault(c => c.GridX == gridX && c.GridY == gridY);
     }
 
-    public void Update(float dt, Ship? target = null)
+    public void Update(float dt, Ship? target = null, ParticleSystem? particles = null)
     {
+        // Reset per-frame flags
+        LastHitWasShielded = false;
+
         // Update all components
         foreach (var comp in Components)
             comp.Update(dt);
@@ -147,6 +238,54 @@ public class Ship
         {
             Target = target;
             UpdateAI(dt);
+        }
+
+        // Shield recharge (only when not recently hit)
+        _damageCooldown -= dt;
+        if (_damageCooldown <= 0f)
+        {
+            foreach (var shield in Components)
+            {
+                if (shield.ComponentType == ComponentType.SHIELD &&
+                    shield.Stats.Health > 0 &&
+                    shield.Stats.Health < shield.Stats.MaxHealth)
+                {
+                    shield.Stats.Health = Math.Min(
+                        shield.Stats.MaxHealth,
+                        shield.Stats.Health + (int)(SHIELD_REGEN_RATE * dt));
+                }
+            }
+        }
+
+        // Damage smoke: heavily-damaged components emit occasional smoke
+        if (particles != null)
+        {
+            foreach (var comp in Components)
+            {
+                float hp = (float)comp.Stats.Health / Math.Max(1, comp.Stats.MaxHealth);
+                if (hp < 0.4f && hp > 0f)
+                {
+                    // Probability scales with damage severity (~1 puff/sec at 20% HP)
+                    float chance = (0.4f - hp) * 2f * dt;
+                    if (Random.Shared.NextSingle() < chance)
+                    {
+                        float localX = (comp.GridX - GridWidth / 2f) * Config.GRID_SIZE;
+                        float localY = (comp.GridY - GridHeight / 2f) * Config.GRID_SIZE;
+                        float cosA = MathF.Cos(Angle), sinA = MathF.Sin(Angle);
+                        float wx = X + localX * cosA - localY * sinA;
+                        float wy = Y + localX * sinA + localY * cosA;
+                        particles.CreateDamageSmoke(wx, wy);
+                    }
+                }
+            }
+        }
+
+        // AI strafe timer
+        _strafeTimer -= dt;
+        if (_strafeTimer <= 0f)
+        {
+            _strafeTimer = STRAFE_SWITCH_INTERVAL;
+            _strafeDirection = -_strafeDirection;
         }
 
         // Apply drag
@@ -179,38 +318,56 @@ public class Ship
         if (Target == null)
             return;
 
-        // Calculate direction to target
         float dx = Target.X - X;
         float dy = Target.Y - Y;
-        float distance = (float)Math.Sqrt(dx * dx + dy * dy);
+        float distance = MathF.Sqrt(dx * dx + dy * dy);
+        if (distance < 1f) return;
 
-        if (distance < 10)
-            return;
-
-        float targetAngle = (float)Math.Atan2(dy, dx);
+        float targetAngle = MathF.Atan2(dy, dx);
 
         // Rotate towards target
         float angleDiff = targetAngle - Angle;
-        // Normalize angle difference to [-pi, pi]
-        while (angleDiff > Math.PI)
-            angleDiff -= (float)(2 * Math.PI);
-        while (angleDiff < -Math.PI)
-            angleDiff += (float)(2 * Math.PI);
+        angleDiff = ((angleDiff + MathF.PI) % MathF.Tau) - MathF.PI;
 
-        // Apply rotation
-        float rotationSpeed = 2.0f;
-        if (Math.Abs(angleDiff) > 0.1f)
-            AngularVelocity = rotationSpeed * (angleDiff > 0 ? 1 : -1);
-        else
-            AngularVelocity = 0;
+        float rotationSpeed = 2.5f;
+        AngularVelocity = MathF.Abs(angleDiff) > 0.05f
+            ? rotationSpeed * (angleDiff > 0 ? 1 : -1)
+            : 0f;
 
-        // Move forward if facing target
-        if (Math.Abs(angleDiff) < 0.5f)
+        // Flee when below 25% health
+        float hpPct = MaxHealth > 0 ? (float)TotalHealth / MaxHealth : 1f;
+        if (hpPct < 0.25f)
         {
-            // Keep distance
-            float optimalDistance = 300f;
-            if (distance > optimalDistance)
+            // Flee away from target
+            if (MathF.Abs(angleDiff) < 1.0f)
                 ApplyThrust(dt);
+            return;
+        }
+
+        const float OPTIMAL_DISTANCE = 280f;
+        const float TOO_CLOSE        = 180f;
+
+        if (distance > OPTIMAL_DISTANCE + 60f)
+        {
+            // Too far — close in while roughly facing the target
+            if (MathF.Abs(angleDiff) < 0.6f)
+                ApplyThrust(dt);
+        }
+        else if (distance < TOO_CLOSE)
+        {
+            // Too close — back away
+            ApplyReverseThrust(dt);
+        }
+        else
+        {
+            // In combat range — strafe perpendicular to the target direction
+            if (MathF.Abs(angleDiff) < 0.4f)
+            {
+                float perpAngle = targetAngle + MathF.PI / 2f * _strafeDirection;
+                float thrustForce = TotalThrust * dt * 0.6f;
+                VX += MathF.Cos(perpAngle) * thrustForce;
+                VY += MathF.Sin(perpAngle) * thrustForce;
+            }
         }
     }
 
@@ -296,31 +453,33 @@ public class Ship
             {
                 comp.Fire();
 
-                // Calculate projectile spawn position (in world space)
                 float localX = (comp.GridX - GridWidth / 2f) * Config.GRID_SIZE;
                 float localY = (comp.GridY - GridHeight / 2f) * Config.GRID_SIZE;
-
-                // Rotate by ship angle
                 float rotatedX = localX * (float)Math.Cos(Angle) - localY * (float)Math.Sin(Angle);
                 float rotatedY = localX * (float)Math.Sin(Angle) + localY * (float)Math.Cos(Angle);
-
                 float spawnX = X + rotatedX;
                 float spawnY = Y + rotatedY;
 
-                // Create projectile
-                string projType = comp.ComponentType == ComponentType.WEAPON_LASER ? "laser" : "cannon";
-                int damage = projType == "laser" ? 10 : 25;
-                float speed = projType == "laser" ? 500f : 350f;
-
-                var projectile = new Projectile(spawnX, spawnY, Angle, speed, damage, projType, ShipId);
-                projectiles.Add(projectile);
+                if (comp.ComponentType == ComponentType.WEAPON_MISSILE)
+                {
+                    // Unguided forward missile when no target
+                    var missile = new Missile(spawnX, spawnY, Angle, 260f, 60, ShipId, Target);
+                    projectiles.Add(missile);
+                }
+                else
+                {
+                    string projType = comp.ComponentType == ComponentType.WEAPON_LASER ? "laser" : "cannon";
+                    int damage = projType == "laser" ? 10 : 25;
+                    float speed = projType == "laser" ? 500f : 350f;
+                    projectiles.Add(new Projectile(spawnX, spawnY, Angle, speed, damage, projType, ShipId));
+                }
             }
         }
 
         return projectiles;
     }
 
-    public List<Projectile> FireWeaponsAtTarget(Vector2 targetPosition)
+    public List<Projectile> FireWeaponsAtTarget(Vector2 targetPosition, Ship? targetShip = null)
     {
         var projectiles = new List<Projectile>();
 
@@ -330,37 +489,59 @@ public class Ship
             {
                 comp.Fire();
 
-                // Calculate projectile spawn position (in world space)
                 float localX = (comp.GridX - GridWidth / 2f) * Config.GRID_SIZE;
                 float localY = (comp.GridY - GridHeight / 2f) * Config.GRID_SIZE;
-
-                // Rotate by ship angle
                 float rotatedX = localX * (float)Math.Cos(Angle) - localY * (float)Math.Sin(Angle);
                 float rotatedY = localX * (float)Math.Sin(Angle) + localY * (float)Math.Cos(Angle);
-
                 float spawnX = X + rotatedX;
                 float spawnY = Y + rotatedY;
 
-                // Calculate angle to target
-                float dx = targetPosition.X - spawnX;
-                float dy = targetPosition.Y - spawnY;
-                float targetAngle = (float)Math.Atan2(dy, dx);
-
-                // Create projectile aimed at target
-                string projType = comp.ComponentType == ComponentType.WEAPON_LASER ? "laser" : "cannon";
-                int damage = projType == "laser" ? 10 : 25;
-                float speed = projType == "laser" ? 500f : 350f;
-
-                var projectile = new Projectile(spawnX, spawnY, targetAngle, speed, damage, projType, ShipId);
-                projectiles.Add(projectile);
+                if (comp.ComponentType == ComponentType.WEAPON_MISSILE)
+                {
+                    // Guided missile toward the target ship
+                    float dx0 = targetPosition.X - spawnX;
+                    float dy0 = targetPosition.Y - spawnY;
+                    float launchAngle = MathF.Atan2(dy0, dx0);
+                    var missile = new Missile(spawnX, spawnY, launchAngle, 260f, 60, ShipId, targetShip);
+                    projectiles.Add(missile);
+                }
+                else
+                {
+                    float dx = targetPosition.X - spawnX;
+                    float dy = targetPosition.Y - spawnY;
+                    float targetAngle = (float)Math.Atan2(dy, dx);
+                    string projType = comp.ComponentType == ComponentType.WEAPON_LASER ? "laser" : "cannon";
+                    int damage = projType == "laser" ? 10 : 25;
+                    float speed = projType == "laser" ? 500f : 350f;
+                    projectiles.Add(new Projectile(spawnX, spawnY, targetAngle, speed, damage, projType, ShipId));
+                }
             }
         }
 
         return projectiles;
     }
 
+    /// <summary>Set to true for one frame whenever the last hit was a critical (landed on CORE or POWER).</summary>
+    public bool LastHitWasCritical { get; private set; }
+
     public void TakeDamage(int damage, float hitX, float hitY)
     {
+        // Reset per-frame flags
+        LastHitWasCritical = false;
+
+        // Reset damage cooldown (blocks shield regen)
+        _damageCooldown = DAMAGE_COOLDOWN_DURATION;
+
+        // Shield absorption: each functional shield reduces damage by 20%, capped at 70%
+        int shieldCount = Components.Count(c =>
+            c.ComponentType == ComponentType.SHIELD && c.Stats.Health > 0);
+        if (shieldCount > 0)
+        {
+            float absorption = Math.Min(0.70f, shieldCount * 0.20f);
+            damage = Math.Max(1, (int)(damage * (1f - absorption)));
+            LastHitWasShielded = true;
+        }
+
         // Convert world position to local grid position
         float localX = hitX - X;
         float localY = hitY - Y;
@@ -378,6 +559,13 @@ public class Ship
         var comp = GetComponentAt(gridX, gridY);
         if (comp != null)
         {
+            // Critical hit: landing on CORE or POWER deals double damage
+            if (comp.ComponentType == ComponentType.CORE || comp.ComponentType == ComponentType.POWER)
+            {
+                damage = (int)(damage * 2.0f);
+                LastHitWasCritical = true;
+            }
+
             bool destroyed = comp.TakeDamage(damage);
             if (destroyed)
                 Components.Remove(comp);
@@ -415,7 +603,7 @@ public class Ship
         );
     }
 
-    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, RenderTarget2D? shipSurface, float cameraX, float cameraY, GraphicsDevice graphicsDevice, Dictionary<string, Texture2D>? componentTextures = null)
+    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, float cameraX, float cameraY, GraphicsDevice graphicsDevice, float zoom, float gameTime, Dictionary<string, Texture2D>? componentTextures = null)
     {
         int screenX = (int)(X - cameraX);
         int screenY = (int)(Y - cameraY);
@@ -441,14 +629,19 @@ public class Ship
         int shipWidth = GridWidth * Config.GRID_SIZE;
         int shipHeight = GridHeight * Config.GRID_SIZE;
 
-        if (shipSurface == null)
-            shipSurface = new RenderTarget2D(graphicsDevice, shipWidth, shipHeight);
+        // Reuse or (re)create the cached render target
+        if (_shipSurface == null || _shipSurface.IsDisposed ||
+            _shipSurface.Width != shipWidth || _shipSurface.Height != shipHeight)
+        {
+            _shipSurface?.Dispose();
+            _shipSurface = new RenderTarget2D(graphicsDevice, shipWidth, shipHeight);
+        }
 
         // End the current spriteBatch before changing render targets
         spriteBatch.End();
 
-        // Render components on temporary surface
-        graphicsDevice.SetRenderTarget(shipSurface);
+        // Render components onto the ship surface
+        graphicsDevice.SetRenderTarget(_shipSurface);
         graphicsDevice.Clear(Color.Transparent);
 
         spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
@@ -456,19 +649,21 @@ public class Ship
         {
             int compX = comp.GridX * Config.GRID_SIZE;
             int compY = comp.GridY * Config.GRID_SIZE;
-            comp.Render(spriteBatch, pixelTexture, compX, compY, Config.GRID_SIZE, componentTextures);
+            comp.Render(spriteBatch, pixelTexture, compX, compY, Config.GRID_SIZE, gameTime, componentTextures);
         }
         spriteBatch.End();
 
-        // Reset render target
+        // Restore main render target
         graphicsDevice.SetRenderTarget(null);
 
-        // Restart spriteBatch for drawing to main surface
-        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
+        // Restart the world spriteBatch with the correct zoom transform so subsequent
+        // draws (other ships, projectiles, indicators) are all properly scaled.
+        Matrix zoomTransform = Matrix.CreateScale(zoom);
+        spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, null, null, null, null, zoomTransform);
 
-        // Draw rotated ship on main surface
+        // Draw rotated ship onto the main surface
         spriteBatch.Draw(
-            shipSurface,
+            _shipSurface,
             new Vector2(screenX, screenY),
             null,
             Color.White,
@@ -478,8 +673,8 @@ public class Ship
             SpriteEffects.None,
             0
         );
-        
-        // Draw crew members on top of ship
+
+        // Draw crew members on top of the ship
         CrewManager?.Render(spriteBatch, pixelTexture, cameraX, cameraY);
     }
 }

@@ -27,39 +27,40 @@ Goal: Make the game visually appealing with professional graphics
 - [x] Nebula and space dust effects
 - [x] Nebula texture integration (real PNG assets with parallax)
 - [ ] Dynamic lighting and ambient effects
-- [ ] Asteroid fields and space debris
+- [x] Asteroid fields and space debris
 
 #### 1.2 Particle Systems
 - [x] Weapon fire particle effects (lasers, projectiles)
 - [x] Explosion animations with debris
 - [x] Engine thrust particles
-- [ ] Shield impact effects
+- [x] Shield impact effects
 - [x] Damage sparks and fire effects
+- [x] Damage-state smoke (heavily damaged components emit smoke)
 
 #### 1.3 Ship Graphics
 - [x] Enemy ship pre-rendered sprites (26 PNG variants, randomly assigned)
 - [ ] Improved component sprites with more detail
-- [ ] Component damage visual states (intact → damaged → destroyed)
+- [x] Component damage visual states (intact → damaged → destroyed)
 - [ ] Ship hull textures and materials
-- [ ] Glow effects for powered systems
-- [ ] Weapon charge-up animations
+- [x] Glow effects for powered systems
+- [x] Weapon charge-up animations
 
 ### Phase 2: User Interface & HUD 📊
 
 Goal: Create a professional, informative interface
 
 #### 2.1 Combat HUD
-- [ ] Health/shield status bars
-- [ ] Power generation/consumption display
-- [ ] Weapon status and cooldowns
-- [ ] Target lock indicator
-- [ ] Damage indicators (directional)
+- [x] Health/shield status bars
+- [x] Power generation/consumption display
+- [x] Weapon status and cooldowns
+- [ ] Target lock indicator (enhanced)
+- [x] Damage indicators (directional screen-edge flash)
 
 #### 2.2 Ship Management UI
 - [ ] Fleet/ship selection bar at bottom
-- [ ] Component status panel
+- [x] Component status panel (selected ship shows per-component HP bars)
 - [ ] Resource counters (if economy added)
-- [ ] Minimap showing battlefield overview
+- [x] Minimap showing battlefield overview
 - [ ] Tactical zoom controls
 
 #### 2.3 Mission System UI
@@ -73,14 +74,14 @@ Goal: Create a professional, informative interface
 Goal: Add depth and variety to gameplay
 
 #### 3.1 Extended Combat
-- [ ] Additional weapon types (missiles, torpedoes, point defense)
-- [ ] Shield systems with recharge mechanics
-- [ ] Critical hits and component-specific damage
+- [x] Additional weapon types (missiles — homing with turn rate, cyan exhaust)
+- [x] Shield systems with recharge mechanics
+- [x] Critical hits and component-specific damage (2x damage on CORE/POWER, CRIT! label, particle burst)
 - [ ] Weapon targeting priorities
 - [ ] Formation combat for multiple ships
 
 #### 3.2 Ship Building
-- [ ] Ship templates and presets
+- [x] Ship templates and presets (F1=Assault, F2=Tanker, F3=Speed, F4=Default in build mode)
 - [ ] Save/load custom ship designs
 - [ ] Symmetry tools for building
 - [ ] Component rotation
@@ -105,8 +106,8 @@ Goal: Add features that increase replayability
 - [ ] Boss battles
 
 #### 4.2 AI Improvements
-- [ ] Advanced enemy tactics and formations
-- [ ] Different enemy ship types and behaviors
+- [x] Advanced enemy tactics and formations (strafing/orbiting, flee at low health)
+- [x] Different enemy ship types and behaviors (Scout, Gunship, Support; wave-scaled spawning)
 - [ ] Friendly AI wingmen
 - [ ] Dynamic difficulty adjustment
 

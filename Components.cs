@@ -40,6 +40,7 @@ public static class ComponentType
     public const string ENGINE = "engine";
     public const string WEAPON_LASER = "weapon_laser";
     public const string WEAPON_CANNON = "weapon_cannon";
+    public const string WEAPON_MISSILE = "weapon_missile";
     public const string ARMOR = "armor";
     public const string POWER = "power";
     public const string SHIELD = "shield";
@@ -84,6 +85,8 @@ public class Component
                 "Laser", 40, 40, 15, 0, 0f, new Color(255, 0, 0)),
             Subspace.ComponentType.WEAPON_CANNON => new ComponentStats(
                 "Cannon", 60, 60, 20, 0, 0f, new Color(150, 150, 0)),
+            Subspace.ComponentType.WEAPON_MISSILE => new ComponentStats(
+                "Missile Bay", 55, 55, 30, 0, 0f, new Color(0, 180, 200)),
             Subspace.ComponentType.ARMOR => new ComponentStats(
                 "Armor", 150, 150, 0, 0, 0f, new Color(150, 150, 150)),
             Subspace.ComponentType.POWER => new ComponentStats(
@@ -124,7 +127,8 @@ public class Component
     public bool CanFire()
     {
         return (ComponentType == Subspace.ComponentType.WEAPON_LASER || 
-                ComponentType == Subspace.ComponentType.WEAPON_CANNON) &&
+                ComponentType == Subspace.ComponentType.WEAPON_CANNON ||
+                ComponentType == Subspace.ComponentType.WEAPON_MISSILE) &&
                Cooldown <= 0 && Stats.Health > 0;
     }
 
@@ -134,6 +138,8 @@ public class Component
             Cooldown = 0.5f;  // 2 shots per second
         else if (ComponentType == Subspace.ComponentType.WEAPON_CANNON)
             Cooldown = 1.5f;  // Slower but more powerful
+        else if (ComponentType == Subspace.ComponentType.WEAPON_MISSILE)
+            Cooldown = 3.0f;  // Slow reload, powerful homing
     }
 
     private float GetHealthPercent()
@@ -152,11 +158,14 @@ public class Component
         );
     }
 
-    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, int x, int y, int gridSize, Dictionary<string, Texture2D>? componentTextures = null)
+    public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, int x, int y, int gridSize, float gameTime, Dictionary<string, Texture2D>? componentTextures = null)
     {
         // Get health percentage for damage indication
         float healthPercent = GetHealthPercent();
-        
+
+        // Draw powered-system glow BEFORE the component body (so it sits underneath)
+        DrawPoweredGlow(spriteBatch, pixelTexture, x, y, gridSize, healthPercent, gameTime);
+
         // Try to use texture if available
         if (componentTextures != null && componentTextures.TryGetValue(ComponentType, out Texture2D? texture))
         {
@@ -167,6 +176,7 @@ public class Component
             Color tintColor = GetDamageTintColor(healthPercent);
             
             spriteBatch.Draw(texture, destRect, tintColor);
+            DrawDamageOverlay(spriteBatch, pixelTexture, x, y, gridSize, healthPercent, gameTime);
             return;
         }
         
@@ -243,6 +253,16 @@ public class Component
             DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 2, centerY - 14, 4, 12), Color.Orange * 0.6f, 1);
             DrawRectangle(spriteBatch, pixelTexture, new Rectangle(centerX - 1, centerY - 13, 2, 11), Color.Yellow, 1);
         }
+        else if (ComponentType == Subspace.ComponentType.WEAPON_MISSILE)
+        {
+            // Missile bay — cyan with an arrow symbol
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 8, new Color(0, 180, 200) * 0.4f);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY, 5, new Color(0, 200, 230));
+            // Missile silhouette (two angled lines + tip)
+            DrawLine(spriteBatch, pixelTexture, centerX - 4, centerY + 5, centerX, centerY - 8, 2, Color.White);
+            DrawLine(spriteBatch, pixelTexture, centerX + 4, centerY + 5, centerX, centerY - 8, 2, Color.White);
+            DrawCircle(spriteBatch, pixelTexture, centerX, centerY - 8, 2, new Color(0, 255, 255));
+        }
         else if (ComponentType == Subspace.ComponentType.POWER)
         {
             // Reactor with energy glow
@@ -309,6 +329,112 @@ public class Component
                 int x2 = centerX + (int)(Math.Cos(angle) * 9);
                 int y2 = centerY + (int)(Math.Sin(angle) * 9);
                 DrawLine(spriteBatch, pixelTexture, x1, y1, x2, y2, 2, Color.White);
+            }
+        }
+
+        // Damage overlay drawn on top of everything else
+        DrawDamageOverlay(spriteBatch, pixelTexture, x, y, gridSize, healthPercent, gameTime);
+    }
+
+    /// <summary>
+    /// Pulsing outer glow ring for powered / active components.
+    /// Drawn before the component body so it appears behind it.
+    /// </summary>
+    private void DrawPoweredGlow(SpriteBatch sb, Texture2D px, int x, int y, int gridSize, float healthPercent, float gameTime)
+    {
+        if (Stats.Health <= 0) return;
+
+        float pulse = (MathF.Sin(gameTime * 2.8f) + 1f) / 2f;   // 0..1
+
+        Color? glowColor = null;
+        float baseAlpha = 0f;
+
+        switch (ComponentType)
+        {
+            case Subspace.ComponentType.POWER:
+                glowColor = new Color(0, 220, 80);
+                baseAlpha = 0.25f + pulse * 0.35f;
+                break;
+            case Subspace.ComponentType.SHIELD:
+                glowColor = Color.Cyan;
+                baseAlpha = 0.20f + pulse * 0.30f;
+                break;
+            case Subspace.ComponentType.ENGINE:
+            case Subspace.ComponentType.ENGINE_ROOM:
+                glowColor = new Color(60, 130, 255);
+                baseAlpha = 0.20f + pulse * 0.25f;
+                break;
+            case Subspace.ComponentType.WEAPON_LASER:
+            {
+                // Glow brightens as weapon charges back up (Cooldown → 0)
+                float chargeT = 1f - Math.Clamp(Cooldown / 0.5f, 0f, 1f);
+                glowColor = Color.Red;
+                baseAlpha = 0.10f + chargeT * 0.50f;
+                break;
+            }
+            case Subspace.ComponentType.WEAPON_CANNON:
+            {
+                float chargeT = 1f - Math.Clamp(Cooldown / 1.5f, 0f, 1f);
+                glowColor = Color.Orange;
+                baseAlpha = 0.10f + chargeT * 0.45f;
+                break;
+            }
+            case Subspace.ComponentType.WEAPON_MISSILE:
+            {
+                float chargeT = 1f - Math.Clamp(Cooldown / 3.0f, 0f, 1f);
+                glowColor = new Color(0, 200, 255);
+                baseAlpha = 0.08f + chargeT * 0.50f;
+                break;
+            }
+        }
+
+        if (glowColor == null || baseAlpha <= 0f) return;
+
+        Color gc = glowColor.Value * (baseAlpha * healthPercent);
+        // Outer halo ring (2 px wide, 3 px outside the component box)
+        DrawRectangle(sb, px, new Rectangle(x - 3, y - 3, gridSize + 4, gridSize + 4), gc, 2);
+        // Second, dimmer ring further out
+        DrawRectangle(sb, px, new Rectangle(x - 6, y - 6, gridSize + 10, gridSize + 10), gc * 0.35f, 1);
+    }
+
+    /// <summary>
+    /// Deterministic damage marks drawn on top of the component.
+    /// Burn scorch marks at less than 70% HP; crack lines and flickering red overlay at less than 30% HP.
+    /// </summary>
+    private void DrawDamageOverlay(SpriteBatch sb, Texture2D px, int x, int y, int gridSize, float healthPercent, float gameTime)
+    {
+        if (healthPercent >= 0.7f) return;
+
+        // Seeded RNG ensures the marks look the same every frame
+        var rng = new Random(GridX * 1997 + GridY * 31);
+
+        // Burn / scorch marks — count increases with damage
+        int markCount = 1 + (int)((1f - healthPercent) * 7f);
+        for (int i = 0; i < markCount; i++)
+        {
+            int mx = x + 3 + (int)(rng.NextDouble() * (gridSize - 8));
+            int my = y + 3 + (int)(rng.NextDouble() * (gridSize - 8));
+            int mr = 1 + (int)(rng.NextDouble() * 2);
+            float markAlpha = 0.55f + (float)rng.NextDouble() * 0.4f;
+            DrawCircle(sb, px, mx, my, mr, Color.Black * markAlpha);
+        }
+
+        if (healthPercent < 0.3f)
+        {
+            // Flickering red critical overlay
+            float flicker = MathF.Abs(MathF.Sin(gameTime * 9f + GridX * 1.3f));
+            sb.Draw(px, new Rectangle(x + 1, y + 1, gridSize - 4, gridSize - 4),
+                    new Color(200, 20, 20) * (flicker * 0.28f));
+
+            // Crack lines — 3-4 per critical component
+            int crackCount = 3 + (int)(rng.NextDouble() * 2);
+            for (int i = 0; i < crackCount; i++)
+            {
+                int cx2 = x + 3 + (int)(rng.NextDouble() * (gridSize - 8));
+                int cy2 = y + 3 + (int)(rng.NextDouble() * (gridSize - 8));
+                int dx  = (int)((rng.NextDouble() - 0.5) * 16);
+                int dy  = (int)((rng.NextDouble() - 0.5) * 16);
+                DrawLine(sb, px, cx2, cy2, cx2 + dx, cy2 + dy, 1, Color.Black * 0.88f);
             }
         }
     }
