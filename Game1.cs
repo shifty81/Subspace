@@ -10,8 +10,8 @@ namespace Subspace;
 public class Game1 : Game
 {
     private GraphicsDeviceManager _graphics;
-    private SpriteBatch _spriteBatch;
-    private Texture2D _pixelTexture;
+    private SpriteBatch _spriteBatch = null!;
+    private Texture2D _pixelTexture = null!;
     
     // Component textures
     private Dictionary<string, Texture2D> _componentTextures = new Dictionary<string, Texture2D>();
@@ -48,15 +48,11 @@ public class Game1 : Game
     private bool _mouseTargetingMode = false;
     private Vector2? _mouseTargetPosition = null;
 
-    // UI
-    private SpriteFont? _font;
-
     // Input state
     private KeyboardState _previousKeyboardState;
     private MouseState _previousMouseState;
 
     private Random _random = new Random();
-    private RenderTarget2D? _shipRenderTarget;
 
     public Game1()
     {
@@ -506,7 +502,7 @@ public class Game1 : Game
         // Draw player
         if (_player != null)
         {
-            _player.Render(_spriteBatch, _pixelTexture, _shipRenderTarget, _cameraX, _cameraY, GraphicsDevice, _componentTextures);
+            _player.Render(_spriteBatch, _pixelTexture, null, _cameraX, _cameraY, GraphicsDevice, _componentTextures);
             
             // Draw selection indicator if selected
             if (_selectedShip == _player)
@@ -516,7 +512,7 @@ public class Game1 : Game
         // Draw enemies
         foreach (var enemy in _enemies)
         {
-            enemy.Render(_spriteBatch, _pixelTexture, _shipRenderTarget, _cameraX, _cameraY, GraphicsDevice, _componentTextures);
+            enemy.Render(_spriteBatch, _pixelTexture, null, _cameraX, _cameraY, GraphicsDevice, _componentTextures);
             
             // Draw selection indicator if selected
             if (_selectedShip == enemy)
