@@ -25,6 +25,7 @@ Goal: Make the game visually appealing with professional graphics
 #### 1.1 Space Environment
 - [x] Enhanced starfield background with parallax scrolling
 - [x] Nebula and space dust effects
+- [x] Nebula texture integration (real PNG assets with parallax)
 - [ ] Dynamic lighting and ambient effects
 - [ ] Asteroid fields and space debris
 
@@ -36,6 +37,7 @@ Goal: Make the game visually appealing with professional graphics
 - [x] Damage sparks and fire effects
 
 #### 1.3 Ship Graphics
+- [x] Enemy ship pre-rendered sprites (26 PNG variants, randomly assigned)
 - [ ] Improved component sprites with more detail
 - [ ] Component damage visual states (intact → damaged → destroyed)
 - [ ] Ship hull textures and materials
