@@ -31,12 +31,37 @@ public class NebulaCloud
 }
 
 /// <summary>
+/// A positioned nebula texture in the world
+/// </summary>
+public class NebulaTextureCloud
+{
+    public Texture2D Texture { get; set; }
+    public float X { get; set; }
+    public float Y { get; set; }
+    public float ParallaxFactor { get; set; }
+    public float Alpha { get; set; }
+
+    public NebulaTextureCloud(Texture2D texture, float x, float y, float parallaxFactor, float alpha)
+    {
+        Texture = texture;
+        X = x;
+        Y = y;
+        ParallaxFactor = parallaxFactor;
+        Alpha = alpha;
+    }
+}
+
+/// <summary>
 /// Procedural nebula system for space background
 /// </summary>
 public class NebulaSystem
 {
     private List<NebulaCloud> clouds = new List<NebulaCloud>();
+    private List<NebulaTextureCloud> textureClouds = new List<NebulaTextureCloud>();
     private Random random = new Random();
+
+    private readonly float worldWidth = Config.SCREEN_WIDTH * 4f;
+    private readonly float worldHeight = Config.SCREEN_HEIGHT * 4f;
     
     // Color schemes for different nebula types
     private readonly Color[][] nebulaColorSchemes = 
@@ -58,9 +83,6 @@ public class NebulaSystem
 
     private void GenerateNebulas()
     {
-        int worldWidth = Config.SCREEN_WIDTH * 4;
-        int worldHeight = Config.SCREEN_HEIGHT * 4;
-
         // Generate multiple nebula clouds at different depths
         for (int layer = 0; layer < 3; layer++)
         {
@@ -83,23 +105,58 @@ public class NebulaSystem
         }
     }
 
+    /// <summary>
+    /// Load nebula textures and scatter them across the world
+    /// </summary>
+    public void LoadTextures(Texture2D[] nebulaTextures)
+    {
+        textureClouds.Clear();
+        if (nebulaTextures == null || nebulaTextures.Length == 0)
+            return;
+
+        // Place several nebula textures at different positions and parallax depths
+        int count = nebulaTextures.Length * 2;
+        for (int i = 0; i < count; i++)
+        {
+            float x = (float)random.NextDouble() * worldWidth;
+            float y = (float)random.NextDouble() * worldHeight;
+            float parallaxFactor = 0.05f + (float)random.NextDouble() * 0.1f;
+            float alpha = 0.25f + (float)random.NextDouble() * 0.25f;
+            var texture = nebulaTextures[random.Next(nebulaTextures.Length)];
+            textureClouds.Add(new NebulaTextureCloud(texture, x, y, parallaxFactor, alpha));
+        }
+    }
+
     public void Render(SpriteBatch spriteBatch, Texture2D pixelTexture, float cameraX, float cameraY)
     {
+        // Draw texture-based nebulae first (deepest layer)
+        foreach (var tc in textureClouds)
+        {
+            float parallaxX = cameraX * tc.ParallaxFactor;
+            float parallaxY = cameraY * tc.ParallaxFactor;
+
+            float screenX = ((tc.X - parallaxX) % worldWidth + worldWidth) % worldWidth;
+            float screenY = ((tc.Y - parallaxY) % worldHeight + worldHeight) % worldHeight;
+
+            int drawWidth = tc.Texture.Width;
+            int drawHeight = tc.Texture.Height;
+
+            if (screenX >= -drawWidth && screenX <= Config.SCREEN_WIDTH &&
+                screenY >= -drawHeight && screenY <= Config.SCREEN_HEIGHT)
+            {
+                spriteBatch.Draw(tc.Texture, new Rectangle((int)screenX, (int)screenY, drawWidth, drawHeight),
+                    Color.White * tc.Alpha);
+            }
+        }
+
         foreach (var cloud in clouds)
         {
             // Apply parallax
             float parallaxX = cameraX * cloud.ParallaxFactor;
             float parallaxY = cameraY * cloud.ParallaxFactor;
 
-            // Calculate screen position with wrapping
-            float worldWidth = Config.SCREEN_WIDTH * 4;
-            float worldHeight = Config.SCREEN_HEIGHT * 4;
-
-            float screenX = (cloud.X - parallaxX) % worldWidth;
-            float screenY = (cloud.Y - parallaxY) % worldHeight;
-
-            if (screenX < 0) screenX += worldWidth;
-            if (screenY < 0) screenY += worldHeight;
+            float screenX = ((cloud.X - parallaxX) % worldWidth + worldWidth) % worldWidth;
+            float screenY = ((cloud.Y - parallaxY) % worldHeight + worldHeight) % worldHeight;
 
             // Only render if visible (with large margin for cloud size)
             if (screenX >= -cloud.Size && screenX <= Config.SCREEN_WIDTH + cloud.Size &&

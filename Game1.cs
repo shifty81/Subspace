@@ -16,6 +16,12 @@ public class Game1 : Game
     // Component textures
     private Dictionary<string, Texture2D> _componentTextures = new Dictionary<string, Texture2D>();
 
+    // Enemy ship sprites (pre-rendered)
+    private List<Texture2D> _enemyShipSprites = new List<Texture2D>();
+
+    // Nebula textures
+    private Texture2D[] _nebulaTextures = Array.Empty<Texture2D>();
+
     // Game state
     private string _mode = Config.MODE_PLAY;
     private bool _paused = false;
@@ -100,7 +106,13 @@ public class Game1 : Game
                 y = _random.Next(100, Config.SCREEN_HEIGHT - 100);
             }
 
-            _enemies.Add(new Ship(x, y, i + 1, false));
+            var enemy = new Ship(x, y, i + 1, false);
+
+            // Assign a random pre-rendered sprite if available
+            if (_enemyShipSprites.Count > 0)
+                enemy.PrerenderedTexture = _enemyShipSprites[_random.Next(_enemyShipSprites.Count)];
+
+            _enemies.Add(enemy);
         }
 
         _projectiles.Clear();
@@ -131,7 +143,37 @@ public class Game1 : Game
             Console.WriteLine($"Warning: Could not load component textures: {ex.Message}");
             Console.WriteLine("Falling back to simple rendering.");
         }
-        
+
+        // Load nebula background textures
+        try
+        {
+            _nebulaTextures = new[]
+            {
+                Content.Load<Texture2D>("Sprites/Background/Nebula1"),
+                Content.Load<Texture2D>("Sprites/Background/Nebula2"),
+                Content.Load<Texture2D>("Sprites/Background/Nebula3"),
+            };
+            _nebulas?.LoadTextures(_nebulaTextures);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Could not load nebula textures: {ex.Message}");
+        }
+
+        // Load enemy ship sprites
+        try
+        {
+            for (int i = 1; i <= 13; i++)
+            {
+                _enemyShipSprites.Add(Content.Load<Texture2D>($"Sprites/EnemyShips/{i}"));
+                _enemyShipSprites.Add(Content.Load<Texture2D>($"Sprites/EnemyShips/{i}B"));
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Could not load enemy ship sprites: {ex.Message}");
+        }
+
         // Note: In a real game, you would load a font from Content pipeline
         // For now, we'll skip text rendering or use a basic approach
     }

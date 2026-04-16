@@ -35,6 +35,9 @@ public class Ship
     public Ship? Target { get; set; }
     public string AIState { get; set; } = "idle";
 
+    // Optional pre-rendered sprite for enemies (overrides component-based rendering)
+    public Texture2D? PrerenderedTexture { get; set; }
+
     public Ship(float x, float y, int shipId, bool isPlayer = false)
     {
         X = x;
@@ -416,6 +419,23 @@ public class Ship
     {
         int screenX = (int)(X - cameraX);
         int screenY = (int)(Y - cameraY);
+
+        // If a pre-rendered sprite is assigned (e.g. for enemy ships), draw it directly
+        if (PrerenderedTexture != null)
+        {
+            spriteBatch.Draw(
+                PrerenderedTexture,
+                new Vector2(screenX, screenY),
+                null,
+                Color.White,
+                -Angle,
+                new Vector2(PrerenderedTexture.Width / 2f, PrerenderedTexture.Height / 2f),
+                1.0f,
+                SpriteEffects.None,
+                0
+            );
+            return;
+        }
 
         // Create a temporary surface for the ship
         int shipWidth = GridWidth * Config.GRID_SIZE;
