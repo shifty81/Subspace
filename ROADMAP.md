@@ -67,7 +67,7 @@ Goal: Create a professional, informative interface
 - [ ] Mission/objective panel
 - [ ] Quest tracker
 - [ ] Bounty/reward display
-- [ ] Wave counter for survival mode
+- [x] Wave counter for survival mode
 
 ### Phase 3: Gameplay Features ⚔️
 
@@ -89,10 +89,10 @@ Goal: Add depth and variety to gameplay
 
 #### 3.3 Progression System
 - [ ] Campaign mode with story missions
-- [ ] Resource gathering and economy
-- [ ] Ship upgrades and tech tree
-- [ ] Unlock new components through progression
-- [ ] Player leveling and skills
+- [x] Resource gathering and economy (enemy loot drops — credits + metal ore, asteroid ore drops, auto-collect)
+- [x] Research tree with 10 prerequisite-gated nodes (unlock via Research Terminal in ship interior)
+- [ ] Ship upgrades that apply unlocked research
+- [x] Player resource tracking via Inventory (Credits, Metal Ore, Fuel Cells, Food, Water…)
 
 ### Phase 4: Advanced Features 🚀
 
@@ -100,6 +100,7 @@ Goal: Add features that increase replayability
 
 #### 4.1 Game Modes
 - [ ] Survival/wave mode
+- [x] Sector-based exploration (Galaxy Map — M key, travel between procedurally generated sectors)
 - [ ] Mission-based campaign
 - [ ] Sandbox/creative mode
 - [ ] Challenge scenarios

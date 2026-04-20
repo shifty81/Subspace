@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Subspace;
 
@@ -63,6 +64,11 @@ public class ShipInteriorScene : IScene
     private string _notification = "";
     private float  _notifyTimer;
     private const float NOTIFY_DURATION = 3f;
+
+    // ── Research terminal overlay ─────────────────────────────────────────────
+    private bool _researchOpen = false;
+    private int  _researchCursor = 0;
+    private List<ResearchNode> _researchNodes = new();
 
     // ── Build palette ─────────────────────────────────────────────────────────
     private static readonly InteriorTileType[] _buildPalette =
@@ -142,6 +148,14 @@ public class ShipInteriorScene : IScene
 
         KeyboardState keys = Keyboard.GetState();
 
+        // ── Research terminal overlay takes priority ───────────────────────────
+        if (_researchOpen)
+        {
+            UpdateResearchOverlay(keys);
+            _prevKeys = keys;
+            return;
+        }
+
         // ── Exit interior ────────────────────────────────────────────────────
         bool exitKey = WasJustPressed(Keys.I, keys) || WasJustPressed(Keys.Tab, keys);
         if (exitKey || _pilotingRequested)
@@ -175,7 +189,11 @@ public class ShipInteriorScene : IScene
                 }
                 else if (interacted.HasValue)
                 {
-                    Notify(GetInteractMessage(interacted.Value));
+                    // Open research terminal overlay when interacting with it
+                    if (interacted.Value == InteriorTileType.ResearchTerminal)
+                        OpenResearchOverlay();
+                    else
+                        Notify(GetInteractMessage(interacted.Value));
                 }
             }
         }
@@ -224,7 +242,7 @@ public class ShipInteriorScene : IScene
     {
         InteriorTileType.CommandChair     => "Sitting at helm…",
         InteriorTileType.Workbench        => "Using workbench.",
-        InteriorTileType.ResearchTerminal => "Accessing research terminal.",
+        InteriorTileType.ResearchTerminal => "Opening research terminal…",
         InteriorTileType.KitchenStation   => "Preparing food.",
         InteriorTileType.MedBay           => "Medical bay: treating crew.",
         InteriorTileType.Door             => "Door toggled.",
@@ -232,6 +250,60 @@ public class ShipInteriorScene : IScene
     };
 
     private void Notify(string msg) { _notification = msg; _notifyTimer = NOTIFY_DURATION; }
+
+    // ── Research terminal overlay ─────────────────────────────────────────────
+
+    private void OpenResearchOverlay()
+    {
+        _researchOpen  = true;
+        _researchNodes = GameState.Instance.Research.AllNodes
+            .OrderBy(n => n.Cost)
+            .ThenBy(n => n.DisplayName)
+            .ToList();
+        _researchCursor = Math.Clamp(_researchCursor, 0, Math.Max(0, _researchNodes.Count - 1));
+        Notify("RESEARCH TERMINAL — Up/Down:Select  Enter:Unlock  Esc:Close");
+    }
+
+    private void UpdateResearchOverlay(KeyboardState keys)
+    {
+        if (WasJustPressed(Keys.Escape, keys))
+        {
+            _researchOpen = false;
+            return;
+        }
+
+        int count = _researchNodes.Count;
+        if (count == 0) return;
+
+        if (WasJustPressed(Keys.Up,   keys)) _researchCursor = (_researchCursor - 1 + count) % count;
+        if (WasJustPressed(Keys.Down, keys)) _researchCursor = (_researchCursor + 1) % count;
+
+        if (WasJustPressed(Keys.Enter, keys) || WasJustPressed(Keys.Space, keys))
+        {
+            var node    = _researchNodes[_researchCursor];
+            var tree    = GameState.Instance.Research;
+            if (node.IsAvailable(tree))
+            {
+                if (tree.TryUnlock(node.Id))
+                    Notify($"Unlocked: {node.DisplayName}!");
+                else
+                    Notify($"Not enough research points. Need {node.Cost}.");
+            }
+            else if (node.Unlocked)
+            {
+                Notify($"{node.DisplayName} already unlocked.");
+            }
+            else
+            {
+                Notify($"Prerequisites not met for {node.DisplayName}.");
+            }
+            // Refresh node list
+            _researchNodes = GameState.Instance.Research.AllNodes
+                .OrderBy(n => n.Cost)
+                .ThenBy(n => n.DisplayName)
+                .ToList();
+        }
+    }
 
     // ── Draw (World) ──────────────────────────────────────────────────────────
 
@@ -441,6 +513,99 @@ public class ShipInteriorScene : IScene
             DrawBorder(sb, pixel, nx, ny, nw, nh, Color.Cyan * (0.7f * alpha));
             _font.DrawString(sb, _notification, nx + pad, ny + pad, Color.Cyan * alpha, S);
         }
+
+        // ── Research terminal overlay ─────────────────────────────────────────
+        if (_researchOpen)
+            DrawResearchOverlay(sb, pixel, gameTime);
+    }
+
+    // ── Research overlay draw ─────────────────────────────────────────────────
+
+    private void DrawResearchOverlay(SpriteBatch sb, Texture2D pixel, float gameTime)
+    {
+        if (_font == null) return;
+
+        var tree = GameState.Instance.Research;
+        int pts  = (int)tree.AccumulatedPoints;
+
+        const int S  = 2;
+        int lh = _font.LineHeight(S);
+        const int pad = 8;
+
+        // Panel dimensions
+        int lineCount   = _researchNodes.Count + 3;  // header + points + separator + nodes
+        int panelW      = 500;
+        int panelH      = lineCount * (lh + 3) + pad * 3;
+        int panelX      = (Config.SCREEN_WIDTH  - panelW) / 2;
+        int panelY      = (Config.SCREEN_HEIGHT - panelH) / 2;
+
+        // Dim background
+        sb.Draw(pixel,
+            new Rectangle(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT),
+            Color.Black * 0.70f);
+
+        // Panel
+        sb.Draw(pixel, new Rectangle(panelX, panelY, panelW, panelH), Color.Black * 0.92f);
+        DrawBorder(sb, pixel, panelX, panelY, panelW, panelH, Color.Cyan * 0.8f);
+
+        int tx = panelX + pad;
+        int ty = panelY + pad;
+
+        // Header
+        const int HS = 3;
+        string title = "RESEARCH TERMINAL";
+        int tw = _font.MeasureWidth(title, HS);
+        _font.DrawString(sb, title, panelX + (panelW - tw) / 2, ty, Color.Cyan, HS);
+        ty += _font.LineHeight(HS) + 4;
+
+        // Points display
+        _font.DrawString(sb, $"Research Points: {pts}", tx, ty, Color.Yellow, S);
+        ty += lh + 6;
+
+        // Node list
+        for (int i = 0; i < _researchNodes.Count; i++)
+        {
+            var node = _researchNodes[i];
+            bool isSel  = i == _researchCursor;
+            bool locked = !node.Unlocked && !node.IsAvailable(tree);
+
+            Color bg  = isSel ? new Color(0, 60, 90) : Color.Transparent;
+            Color col = node.Unlocked ? Color.LimeGreen
+                      : locked        ? new Color(100, 100, 100)
+                      : isSel         ? Color.White
+                      :                 new Color(200, 200, 200);
+
+            if (isSel)
+                sb.Draw(pixel, new Rectangle(panelX + 2, ty - 1, panelW - 4, lh + 2), new Color(0, 60, 90));
+
+            // Status glyph
+            string glyph = node.Unlocked ? "[✓]" : (node.IsAvailable(tree) ? "[ ]" : "[×]");
+            _font.DrawString(sb, glyph, tx, ty, col, S);
+
+            // Name + cost
+            string nameStr = node.Unlocked
+                ? $"{node.DisplayName}"
+                : $"{node.DisplayName}  ({node.Cost} pts)";
+            _font.DrawString(sb, nameStr, tx + 32, ty, col, S);
+
+            // Prereq info (only for locked+selected nodes with prerequisites)
+            if (locked && isSel && node.Prerequisites.Count > 0)
+            {
+                string prereqs = "Requires: " + string.Join(", ", node.Prerequisites);
+                _font.DrawString(sb, prereqs, tx + 32, ty + lh + 1, new Color(160, 160, 80), 1);
+                ty += lh / 2;
+            }
+
+            ty += lh + 3;
+        }
+
+        // Footer
+        string footer = "Up/Down:Navigate   Enter:Unlock   Esc:Close";
+        int fw = _font.MeasureWidth(footer, 1);
+        _font.DrawString(sb, footer,
+            panelX + (panelW - fw) / 2,
+            panelY + panelH - _font.LineHeight(1) - pad,
+            new Color(130, 130, 130), 1);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
