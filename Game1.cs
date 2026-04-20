@@ -85,11 +85,24 @@ public class Game1 : Game
     private const int MINIMAP_SIZE = 150;
     private const float MINIMAP_WORLD_RADIUS = 1200f;
 
-    // ── Scene management (interior / station / planet overlay) ───────────────
+    // ── Loot drops ────────────────────────────────────────────────────────────
+    private record struct LootDrop(float X, float Y, int Credits, int MetalOre, float Lifetime);
+    private List<LootDrop> _lootDrops = new();
+    private const float LOOT_COLLECT_RADIUS = 80f;
+    private const float LOOT_LIFETIME       = 20f;
+
+    // Floating loot-collect labels (world-space, re-uses the CritLabel rise anim)
+    private record struct LootLabel(float X, float Y, float Timer, string Text, Color Tint);
+    private List<LootLabel> _lootLabels = new();
+    private const float LOOT_LABEL_DURATION = 1.8f;
+
+    // ── Scene management (interior / galaxy map overlay) ─────────────────────
     private SceneManager _sceneManager = new SceneManager();
     private ShipInteriorScene? _interiorScene;
+    private SectorMapScene?    _sectorMapScene;
     private InteriorGrid? _shipInteriorGrid;
-    private bool _isInInterior = false;
+    private bool _isInInterior  = false;
+    private bool _isInSectorMap = false;
 
     // Shared UI padding (pixels)
     private const int UI_PAD = 6;
@@ -150,6 +163,8 @@ public class Game1 : Game
         _enemyFireTimers.Clear();
         _damageIndicators.Clear();
         _critLabels.Clear();
+        _lootDrops.Clear();
+        _lootLabels.Clear();
 
         // Create player ship
         _player = new Ship(Config.SCREEN_WIDTH / 2f, Config.SCREEN_HEIGHT / 2f, 0, true);
@@ -176,6 +191,13 @@ public class Game1 : Game
 
         var ctx = new InteriorContext(_player ?? GameState.Instance.PlayerShip!, _shipInteriorGrid);
         _sceneManager.SetImmediate(_interiorScene, ctx);
+    }
+
+    private void EnterSectorMap()
+    {
+        if (_sectorMapScene == null) return;
+        _isInSectorMap = true;
+        _sectorMapScene.Enter();
     }
 
     private void SpawnAsteroids()
@@ -390,6 +412,9 @@ public class Game1 : Game
         _interiorScene = new ShipInteriorScene(_sceneManager);
         _interiorScene.SetResources(_pixelFont, _pixelTexture);
 
+        _sectorMapScene = new SectorMapScene();
+        _sectorMapScene.SetResources(_pixelFont, _pixelTexture);
+
         // Register GameState player ship
         GameState.Instance.PlayerShip = _player;
     }
@@ -397,6 +422,41 @@ public class Game1 : Game
     protected override void Update(GameTime gameTime)
     {
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+        // ── Sector map overlay ────────────────────────────────────────────────
+        if (_isInSectorMap)
+        {
+            _sectorMapScene?.Update(dt);
+
+            if (_sectorMapScene?.ExitRequested == true)
+            {
+                _isInSectorMap = false;
+
+                // Handle travel request
+                if (_sectorMapScene.TravelRequested)
+                {
+                    var (tcx, tcy) = _sectorMapScene.TravelDestination;
+                    GameState.Instance.SectorMap.TravelTo(tcx, tcy);
+                    // Reset the wave for the new sector, keep inventory
+                    _enemies.Clear();
+                    _enemyFireTimers.Clear();
+                    _projectiles.Clear();
+                    _missiles.Clear();
+                    _lootDrops.Clear();
+                    _lootLabels.Clear();
+                    _critLabels.Clear();
+                    _waveClearPending = false;
+                    _wave = 1;
+                    GameState.Instance.Wave = _wave;
+                    SpawnAsteroids();
+                    SpawnWave();
+                }
+            }
+
+            _gameTime += dt;
+            base.Update(gameTime);
+            return;
+        }
 
         // ── Interior scene is active ──────────────────────────────────────────
         if (_isInInterior)
@@ -448,6 +508,10 @@ public class Game1 : Game
         // Enter ship interior (I key)
         if (keyboardState.IsKeyDown(Keys.I) && !_previousKeyboardState.IsKeyDown(Keys.I))
             EnterInterior();
+
+        // Open galaxy map (M key)
+        if (keyboardState.IsKeyDown(Keys.M) && !_previousKeyboardState.IsKeyDown(Keys.M))
+            EnterSectorMap();
 
         // Camera zoom with mouse wheel
         int scrollDelta = mouseState.ScrollWheelValue - _previousMouseState.ScrollWheelValue;
@@ -821,8 +885,19 @@ public class Game1 : Game
                 if (_selectedShip == enemy) _selectedShip = null;
                 _kills++;
                 _score += 100 * _wave;
+
+                // Award research points for kills
+                GameState.Instance.Research.AddPoints(10 + _wave * 2);
+
+                // Drop loot scaled by wave and enemy type
+                int credits = 20 + _random.Next(30 + _wave * 5);
+                int ore     = _random.Next(3);
+                SpawnLootDrop(enemy.X, enemy.Y, credits, ore);
             }
         }
+
+        // Update loot drops (lifetime + auto-collect)
+        UpdateLootDrops(dt);
 
         // Update camera: centre on player, accounting for zoom level
         UpdateCamera();
@@ -856,6 +931,74 @@ public class Game1 : Game
         if (_player == null) return;
         _cameraX = _player.X - Config.SCREEN_WIDTH  / (2f * _cameraZoom);
         _cameraY = _player.Y - Config.SCREEN_HEIGHT / (2f * _cameraZoom);
+    }
+
+    private void SpawnLootDrop(float x, float y, int credits, int metalOre)
+    {
+        // Scatter slightly so drops don't stack
+        x += (_random.NextSingle() - 0.5f) * 30f;
+        y += (_random.NextSingle() - 0.5f) * 30f;
+        _lootDrops.Add(new LootDrop(x, y, credits, metalOre, LOOT_LIFETIME));
+    }
+
+    private void UpdateLootDrops(float dt)
+    {
+        if (_player == null) return;
+
+        float px = _player.X;
+        float py = _player.Y;
+
+        for (int i = _lootDrops.Count - 1; i >= 0; i--)
+        {
+            var drop = _lootDrops[i];
+            float newLife = drop.Lifetime - dt;
+            if (newLife <= 0f)
+            {
+                _lootDrops.RemoveAt(i);
+                continue;
+            }
+
+            float dx = px - drop.X;
+            float dy = py - drop.Y;
+            float dist = MathF.Sqrt(dx * dx + dy * dy);
+
+            if (dist <= LOOT_COLLECT_RADIUS)
+            {
+                // Collect loot
+                var inv = GameState.Instance.Inventory;
+                if (drop.Credits  > 0) { inv.Add(ItemId.CREDITS,   drop.Credits);  }
+                if (drop.MetalOre > 0) { inv.Add(ItemId.METAL_ORE, drop.MetalOre); }
+
+                // Floating collect label
+                string text = BuildLootText(drop.Credits, drop.MetalOre);
+                if (text.Length > 0)
+                    _lootLabels.Add(new LootLabel(drop.X, drop.Y, LOOT_LABEL_DURATION, text, Color.Gold));
+
+                _lootDrops.RemoveAt(i);
+                continue;
+            }
+
+            _lootDrops[i] = drop with { Lifetime = newLife };
+        }
+
+        // Age loot labels
+        for (int i = _lootLabels.Count - 1; i >= 0; i--)
+        {
+            var lbl = _lootLabels[i];
+            float newTimer = lbl.Timer - dt;
+            if (newTimer <= 0f)
+                _lootLabels.RemoveAt(i);
+            else
+                _lootLabels[i] = lbl with { Timer = newTimer };
+        }
+    }
+
+    private static string BuildLootText(int credits, int ore)
+    {
+        if (credits > 0 && ore > 0) return $"+{credits}cr +{ore}ore";
+        if (credits > 0)            return $"+{credits}cr";
+        if (ore     > 0)            return $"+{ore}ore";
+        return "";
     }
 
     private void CheckCollisions()
@@ -976,12 +1119,32 @@ public class Game1 : Game
             }
         }
 
-        // Remove destroyed asteroids
+        // Remove destroyed asteroids; drop ore loot
+        foreach (var ast in _asteroids.ToList())
+        {
+            if (ast.IsDestroyed())
+            {
+                int ore = 1 + _random.Next(4);
+                SpawnLootDrop(ast.X, ast.Y, 0, ore);
+            }
+        }
         _asteroids.RemoveAll(a => a.IsDestroyed());
     }
 
     protected override void Draw(GameTime gameTime)
     {
+        // ── Sector map overlay ────────────────────────────────────────────────
+        if (_isInSectorMap)
+        {
+            GraphicsDevice.Clear(Color.Black);
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend);
+            _sectorMapScene?.DrawWorld(_spriteBatch, _pixelTexture, _gameTime);
+            _sectorMapScene?.DrawUI(_spriteBatch, _pixelTexture, _gameTime);
+            _spriteBatch.End();
+            base.Draw(gameTime);
+            return;
+        }
+
         // ── Interior scene override ───────────────────────────────────────────
         if (_isInInterior)
         {
@@ -1208,9 +1371,12 @@ public class Game1 : Game
         _spriteBatch.Draw(_pixelTexture, new Rectangle(0, Config.SCREEN_HEIGHT - cbH, Config.SCREEN_WIDTH, cbH), Color.Black * 0.85f);
         string ctrlsText = _mode == Config.MODE_BUILD
             ? "WASD:Move  B:Exit-Build  F1-F4:Presets  1-0:Select-Type  L:Place  R:Remove  P:Pause  R:Reset  ESC:Quit"
-            : "WASD:Move  Space:Fire  RClick-Enemy:Lock  RClick-Space:Autopilot  Scroll:Zoom  B:Build  I:Interior  P:Pause  R:Reset  ESC:Quit";
+            : "WASD:Move  Space:Fire  RClick-Enemy:Lock  RClick-Space:Move  Scroll:Zoom  B:Build  I:Interior  M:Map  P:Pause  R:Reset  ESC:Quit";
         _pixelFont.DrawString(_spriteBatch, ctrlsText,
             UI_PAD, Config.SCREEN_HEIGHT - cbH + UI_PAD, new Color(150, 150, 150), S);
+
+        // ── Resources panel (bottom-left, above controls bar) ────────────────
+        DrawResourcesPanel(cbH);
 
         // ── Minimap ─────────────────────────────────────────────────────────
         DrawMinimap(cbH);
@@ -1264,6 +1430,66 @@ public class Game1 : Game
             string critText = "CRIT!";
             int tw = _pixelFont.MeasureWidth(critText, CS);
             _pixelFont.DrawString(_spriteBatch, critText, lx - tw / 2, ly, Color.Yellow * alpha, CS);
+        }
+
+        // Loot drops (glowing gold squares)
+        foreach (var drop in _lootDrops)
+        {
+            float pulse = (MathF.Sin(_gameTime * 4f + drop.X * 0.01f) + 1f) * 0.5f;
+            int dx = (int)(drop.X - _cameraX);
+            int dy = (int)(drop.Y - _cameraY);
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(dx - 4, dy - 4, 8, 8), Color.Gold * (0.6f + pulse * 0.4f));
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(dx - 5, dy - 5, 10, 1), Color.Yellow * 0.5f);
+            _spriteBatch.Draw(_pixelTexture, new Rectangle(dx - 5, dy + 4,  10, 1), Color.Yellow * 0.5f);
+        }
+
+        // Floating loot-collect labels
+        foreach (var lbl in _lootLabels)
+        {
+            float t     = lbl.Timer / LOOT_LABEL_DURATION;
+            float alpha = t;
+            float rise  = (1f - t) * 40f;
+            int lx = (int)(lbl.X - _cameraX);
+            int ly = (int)(lbl.Y - _cameraY - rise);
+            int tw = _pixelFont.MeasureWidth(lbl.Text, CS);
+            _pixelFont.DrawString(_spriteBatch, lbl.Text, lx - tw / 2, ly, lbl.Tint * alpha, CS);
+        }
+    }
+
+    /// <summary>Draws the Credits / Metal Ore / Research Points mini panel.</summary>
+    private void DrawResourcesPanel(int controlBarH)
+    {
+        var inv = GameState.Instance.Inventory;
+        var research = GameState.Instance.Research;
+        const int RS = 2;
+        int lh = _pixelFont.LineHeight(RS);
+
+        int credits  = inv.Get(ItemId.CREDITS);
+        int metalOre = inv.Get(ItemId.METAL_ORE);
+        int resPoints = (int)research.AccumulatedPoints;
+
+        string[] lines =
+        {
+            $"CR {credits}",
+            $"ORE {metalOre}",
+            $"RES {resPoints}",
+        };
+        int panelW = lines.Max(l => _pixelFont.MeasureWidth(l, RS)) + UI_PAD * 2 + 4;
+        int panelH = lines.Length * (lh + 2) + UI_PAD * 2;
+        int panelX = UI_PAD;
+        int panelY = Config.SCREEN_HEIGHT - controlBarH - panelH - UI_PAD;
+
+        _spriteBatch.Draw(_pixelTexture, new Rectangle(panelX, panelY, panelW, panelH), Color.Black * 0.78f);
+        DrawRectangleBorder(panelX, panelY, panelW, panelH, Color.Gold * 0.5f);
+
+        int tx = panelX + UI_PAD;
+        int ty = panelY + UI_PAD;
+
+        Color[] cols = { Color.Gold, new Color(180, 140, 80), new Color(100, 200, 255) };
+        for (int i = 0; i < lines.Length; i++)
+        {
+            _pixelFont.DrawString(_spriteBatch, lines[i], tx, ty, cols[i], RS);
+            ty += lh + 2;
         }
     }
 

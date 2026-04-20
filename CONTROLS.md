@@ -33,6 +33,8 @@
 
 #### Mode Switching
 - **B** - Toggle Build Mode
+- **I** - Enter/Exit Ship Interior
+- **M** - Open Galaxy Map
 - **P** - Pause/Unpause game
 - **R** - Reset game (restart with new enemies)
 - **ESC** - Exit game
@@ -59,7 +61,37 @@
 - **Mouse Wheel** - Zoom in/out for better view while building
 - **B** - Return to Play Mode
 
-## Component Types
+### Interior Controls (press I to enter)
+- **WASD** - Walk character around ship interior
+- **E** - Interact with tile (Helm returns to space, Research Terminal opens research UI)
+- **B** - Toggle Interior Build Mode (place/remove interior tiles)
+- **I** / **Tab** - Exit interior back to space view
+
+### Galaxy Map (press M to open)
+- **WASD** / **Arrow Keys** - Move cursor between sectors
+- **Enter** / **Space** - Travel to highlighted sector (resets wave)
+- **M** / **Esc** - Close map
+
+### Research Terminal (accessible from interior)
+- **Up/Down** - Navigate research nodes
+- **Enter** / **Space** - Unlock selected node (costs research points)
+- **Esc** - Close research terminal
+- Research points are earned by destroying enemies
+
+## Economy & Resources
+
+### Credits
+- Dropped by destroyed enemy ships (auto-collected when nearby)
+- Displayed in the bottom-left resource panel
+
+### Metal Ore
+- Dropped by destroyed asteroids and some enemy ships
+- Auto-collected when player ship passes within range
+
+### Research Points
+- Awarded automatically for every enemy kill (+10 + wave bonus)
+- Spent at the Research Terminal inside the ship interior
+- Unlock technologies like improved engines, shields, advanced weapons
 
 ### Core (Yellow) ⚠️
 - **Critical**: If destroyed, ship is destroyed
