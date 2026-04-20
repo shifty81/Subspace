@@ -588,8 +588,8 @@ public class ShipInteriorScene : IScene
                 : $"{node.DisplayName}  ({node.Cost} pts)";
             _font.DrawString(sb, nameStr, tx + 32, ty, col, S);
 
-            // Prereq info (only for unavailable, unselected)
-            if (!node.Unlocked && locked && isSel && node.Prerequisites.Count > 0)
+            // Prereq info (only for locked+selected nodes with prerequisites)
+            if (locked && isSel && node.Prerequisites.Count > 0)
             {
                 string prereqs = "Requires: " + string.Join(", ", node.Prerequisites);
                 _font.DrawString(sb, prereqs, tx + 32, ty + lh + 1, new Color(160, 160, 80), 1);
